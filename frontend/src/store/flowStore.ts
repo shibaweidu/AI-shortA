@@ -458,8 +458,9 @@ export const useFlowStore = create<FlowState>()(
     }),
     {
       name: "ai-director-flow-v2",
+      skipHydration: true,
       storage: createJSONStorage(() =>
-        createScopedServerPrimaryStorage(createIndexedDbStorage(), getCurrentFlowScopeId, { guestScopeId: "guest" })
+        createScopedServerPrimaryStorage(createIndexedDbStorage(), getCurrentFlowScopeId)
       ),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);

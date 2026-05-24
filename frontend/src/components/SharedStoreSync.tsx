@@ -23,7 +23,6 @@ const rehydrateByStorageKey: Record<string, () => void> = {
 };
 
 function resetAndRehydrateFlowStore() {
-  useFlowStore.setState({ projects: [], items: [], hasHydrated: false });
   void useFlowStore.persist.rehydrate();
 }
 
@@ -33,10 +32,12 @@ function getBaseStorageKey(key: string) {
 
 export function SharedStoreSync() {
   const currentUserId = useAuthStore((state) => state.currentUserId);
+  const authHydrated = useAuthStore((state) => state.hasHydrated);
 
   useEffect(() => {
+    if (!authHydrated) return;
     resetAndRehydrateFlowStore();
-  }, [currentUserId]);
+  }, [authHydrated, currentUserId]);
 
   useEffect(() => {
     let timeout: number | undefined;
