@@ -52,7 +52,8 @@ type ViewMode = "grid" | "batch";
 type FilterBy = "all" | "image" | "video";
 type SortBy = "newest" | "oldest";
 
-const JOB_MISSING_GRACE_MS = 120_000;
+const IMAGE_JOB_MISSING_GRACE_MS = 120_000;
+const VIDEO_JOB_MISSING_GRACE_MS = 10 * 60 * 1000;
 const IMAGE_JOB_MISSING_ERROR_MESSAGE = "历史图片任务不存在，请重新生成。";
 
 const viewModeOptions: Array<{ value: ViewMode; label: string; icon: typeof LayoutGrid }> = [
@@ -86,7 +87,22 @@ function parseDurationSeconds(value?: string | number) {
 }
 
 function isPastMissingJobGrace(item: FlowItem) {
-  return Date.now() - item.createdAt >= JOB_MISSING_GRACE_MS;
+  const graceMs = item.type === "video" ? VIDEO_JOB_MISSING_GRACE_MS : IMAGE_JOB_MISSING_GRACE_MS;
+  return Date.now() - item.createdAt >= graceMs;
+}
+
+function isRecoverableImageError(item: FlowItem) {
+  return item.status === "error" && (
+    item.saveError === IMAGE_JOB_MISSING_ERROR_MESSAGE ||
+    item.saveError === IMAGE_GENERATION_TIMEOUT_MESSAGE
+  );
+}
+
+function isRecoverableVideoError(item: FlowItem) {
+  return item.status === "error" && (
+    item.saveError === VIDEO_JOB_MISSING_ERROR_MESSAGE ||
+    item.saveError === VIDEO_GENERATION_TIMEOUT_MESSAGE
+  );
 }
 
 function isSavableAssetUrl(url?: string) {
@@ -163,7 +179,7 @@ export default function Flow() {
   const [type, setType] = useState<FlowItemType>("image");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [resolution, setResolution] = useState("2k");
-  const [duration, setDuration] = useState("5s");
+  const [duration, setDuration] = useState("10s");
   const [generationCount, setGenerationCount] = useState(1);
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [referenceImageRoles, setReferenceImageRoles] = useState<Record<string, FlowReferenceRole>>({});
@@ -313,7 +329,7 @@ export default function Flow() {
   useEffect(() => {
     if (type !== "video") return;
     if (durationOptions.some((option) => option.value === duration)) return;
-    setDuration(durationOptions[0]?.value ?? "5s");
+    setDuration(durationOptions.find((option) => option.value === "10s")?.value ?? durationOptions[0]?.value ?? "10s");
   }, [duration, durationOptions, type]);
 
   useEffect(() => {
@@ -366,13 +382,13 @@ export default function Flow() {
       (item) =>
         item.type === "image" &&
         !item.url &&
-        (item.status === "generating" || (item.status === "error" && item.saveError === IMAGE_JOB_MISSING_ERROR_MESSAGE))
+        (item.status === "generating" || isRecoverableImageError(item))
     );
     const pendingVideos = projectItems.filter(
       (item) =>
         item.type === "video" &&
         !item.url &&
-        (item.status === "generating" || (item.status === "error" && item.saveError === VIDEO_JOB_MISSING_ERROR_MESSAGE))
+        (item.status === "generating" || isRecoverableVideoError(item))
     );
     if (pendingImages.length === 0 && pendingVideos.length === 0) return;
 
@@ -760,43 +776,46 @@ export default function Flow() {
 
   return (
     <div className="relative -m-6 flex h-[calc(100%+3rem)] flex-col overflow-hidden bg-[#08090d] text-white md:h-[calc(100%+4rem)]">
-      <nav className="sticky top-0 z-30 flex min-h-12 shrink-0 items-center justify-between border-b border-white/[0.06] bg-[#08090d] px-4 py-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-3">
+      <nav className="sticky top-0 z-30 flex min-h-12 shrink-0 flex-col gap-2 border-b border-white/[0.06] bg-[#08090d] px-3 py-2 md:flex-row md:items-center md:justify-between md:px-4 md:py-3">
+        <div className="flex min-w-0 items-center gap-2 md:gap-3">
           <button
             type="button"
             onClick={() => navigate("/projects")}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-[#9aa3b7] transition hover:bg-white/[0.06] hover:text-white"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#9aa3b7] transition hover:bg-white/[0.06] hover:text-white"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium text-[#e4e8f0]">{currentProject.name}</div>
             <div className="truncate text-xs text-[#758099]">{projectItems.length} 个作品</div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+        </div>
+
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             {libraryTabs.map(({ key, label, count }) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => setFilterBy(key)}
                 className={cn(
-                  "rounded-xl px-4 py-2 text-sm transition",
+                  "rounded-lg px-2.5 py-1.5 text-xs sm:rounded-xl sm:px-4 sm:py-2 sm:text-sm transition whitespace-nowrap",
                   filterBy === key
                     ? "bg-white text-black"
                     : "border border-white/[0.06] bg-white/[0.03] text-[#8f97aa] hover:text-white"
                 )}
               >
                 {label}
-                <span className="ml-2 text-xs opacity-70">{count}</span>
+                <span className="ml-1.5 text-[10px] sm:ml-2 sm:text-xs opacity-70">{count}</span>
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-[#758099]">排序</span>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className="text-[10px] sm:text-xs text-[#758099] whitespace-nowrap">排序</span>
             <select
               value={sortBy}
               onChange={(event) => setSortBy(event.target.value as SortBy)}
-              className="h-9 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 text-sm text-white outline-none"
+              className="h-7 sm:h-9 rounded-lg sm:rounded-xl border border-white/[0.06] bg-white/[0.03] px-2 sm:px-3 text-xs sm:text-sm text-white outline-none"
             >
               {sortOptions.map((option) => (
                 <option key={option.value} value={option.value} className="bg-[#111318] text-white">
@@ -805,10 +824,10 @@ export default function Flow() {
               ))}
             </select>
           </div>
-          {saveFeedback ? <span className="hidden text-xs text-emerald-300 md:inline">{saveFeedback}</span> : null}
+          {saveFeedback ? <span className="hidden text-xs text-emerald-300 lg:inline">{saveFeedback}</span> : null}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           <div className="relative">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#6f7890]" />
             <input
@@ -862,14 +881,14 @@ export default function Flow() {
               type="button"
               onClick={() => setOpenDisplayPanel((current) => !current)}
               className={cn(
-                "flex h-8 items-center gap-2 rounded-lg border px-3 text-xs transition",
+                "flex h-7 sm:h-8 items-center gap-1.5 sm:gap-2 rounded-lg border px-2 sm:px-3 text-xs transition",
                 openDisplayPanel
                   ? "border-cyan-400/30 bg-cyan-400/10 text-white"
                   : "border-white/[0.06] bg-white/[0.03] text-[#cfd6e2] hover:border-white/10 hover:text-white"
               )}
             >
-              <SelectedViewModeIcon className="h-3.5 w-3.5" />
-              <span>
+              <SelectedViewModeIcon className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+              <span className="hidden sm:inline">
                 {selectedViewMode.label}
                 {viewMode === "grid" ? ` / ${gridSizeOptions.find((item) => item.value === gridSize)?.label ?? "M"}` : ""}
               </span>

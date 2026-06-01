@@ -46,6 +46,10 @@ function isRenderableImageUrl(url?: string) {
   return url.startsWith("/uploads/") || /^https?:\/\//i.test(url) || /^data:image\//i.test(url) || /^blob:/i.test(url);
 }
 
+function isRecoverableImageError(saveError?: string) {
+  return saveError === IMAGE_JOB_MISSING_ERROR_MESSAGE || saveError === IMAGE_GENERATION_TIMEOUT_MESSAGE;
+}
+
 export default function FlowWorkspace() {
   const navigate = useNavigate();
   const { projectId, itemId } = useParams();
@@ -227,7 +231,7 @@ export default function FlowWorkspace() {
 
   useEffect(() => {
     const shouldRecoverMissingJobError =
-      currentItem?.status === "error" && currentItem.saveError === IMAGE_JOB_MISSING_ERROR_MESSAGE && !currentItem.url;
+      currentItem?.status === "error" && isRecoverableImageError(currentItem.saveError) && !currentItem.url;
     if (!hasHydrated || !currentItem || currentItem.url || (currentItem.status !== "generating" && !shouldRecoverMissingJobError)) return;
     let cancelled = false;
     const recover = async () => {

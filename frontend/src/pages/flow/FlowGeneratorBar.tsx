@@ -24,6 +24,7 @@ import { useSettingsStore, type ProviderConfig } from "../../store/settingsStore
 import { useUserModelStore } from "../../store/userModelStore";
 import { parseProviderModelValue, parseSourcedProviderModelValue } from "../../lib/providerModels";
 import { classifyReferenceImage, fetchReferenceSettings, type ReferenceSettings } from "../../services/referenceSettings";
+import { shouldUseVideoDurationSlider } from "../../lib/generatorOptions";
 
 const creativeTypes: Array<{
   value: FlowItemType;
@@ -54,14 +55,21 @@ const referenceRoleOptions: Array<{ value: FlowReferenceRole; label: string }> =
   { value: "general", label: "通用" },
 ];
 const DEFAULT_REFERENCE_ROLE: FlowReferenceRole = "character";
+type VideoReferenceCapability = { max: number; visibleSlots?: number; labels: string[] };
 
 function getReferenceRoleLabel(role?: FlowReferenceRole) {
   return referenceRoleOptions.find((option) => option.value === role)?.label ?? "角色";
 }
 
-function getVideoReferenceCapability(model?: string, label?: string) {
+function getVideoReferenceCapability(model?: string, label?: string): VideoReferenceCapability {
   const text = `${model ?? ""} ${label ?? ""}`.toLowerCase();
   if (text.includes("grok-video") || text.includes("grok-imagine-video")) return { max: 1, labels: ["首帧"] };
+  if (text.includes("sora-vip3") || text.includes("sora-vip3-pro")) {
+    return { max: 9, visibleSlots: 1, labels: ["参考图"] };
+  }
+  if (text.includes("sora-v3") || text.includes("seedance")) {
+    return { max: 4, visibleSlots: 1, labels: ["参考图"] };
+  }
   if (text.includes("sora")) return { max: 1, labels: ["首帧"] };
   if (text.includes("veo") && text.includes("ref")) return { max: 3, labels: ["参考图1", "参考图2", "参考图3"] };
   if (text.includes("veo")) return { max: 2, labels: ["首帧", "尾帧"] };
@@ -149,7 +157,7 @@ interface FlowGeneratorBarProps {
   generatorRef: RefObject<HTMLDivElement | null>;
   prompt: string;
   onPromptChange: (value: string) => void;
-  onPromptKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
+  onPromptKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
   type: FlowItemType;
   onTypeChange: (value: FlowItemType) => void;
   model: string;
@@ -195,6 +203,53 @@ export interface SelectedStyleReference {
   custom?: boolean;
 }
 
+type AssetMentionState = {
+  open: boolean;
+  query: string;
+  start: number;
+  end: number;
+};
+
+const closedAssetMention: AssetMentionState = {
+  open: false,
+  query: "",
+  start: 0,
+  end: 0,
+};
+
+function getAssetMentionState(value: string, caret: number): AssetMentionState | null {
+  const beforeCaret = value.slice(0, caret);
+  const match = beforeCaret.match(/(^|\s)@([^\s@]*)$/);
+  if (!match) return null;
+  const query = match[2] ?? "";
+  return {
+    open: true,
+    query,
+    start: caret - query.length - 1,
+    end: caret,
+  };
+}
+
+function getPromptReferenceIndexes(value: string) {
+  const indexes = new Set<number>();
+  for (const match of value.matchAll(/@image(\d+)/gi)) {
+    const index = Number.parseInt(match[1] ?? "", 10) - 1;
+    if (Number.isInteger(index) && index >= 0) indexes.add(index);
+  }
+  return indexes;
+}
+
+function reindexPromptReferencesAfterRemoval(value: string, removedIndexes: number[]) {
+  if (!removedIndexes.length) return value;
+  const sorted = [...new Set(removedIndexes)].sort((a, b) => a - b);
+  return value.replace(/@image(\d+)/gi, (_token, rawIndex) => {
+    const index = Number.parseInt(rawIndex, 10) - 1;
+    if (sorted.includes(index)) return "";
+    const shift = sorted.filter((removedIndex) => removedIndex < index).length;
+    return `@image${index - shift + 1}`;
+  });
+}
+
 export function FlowGeneratorBar({
   generatorRef,
   prompt,
@@ -236,6 +291,8 @@ export function FlowGeneratorBar({
   estimatedCredits,
 }: FlowGeneratorBarProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const promptInsertOffsetRef = useRef<number | null>(null);
   const styleFileInputRef = useRef<HTMLInputElement>(null);
   const videoReferenceInputRefs = useRef<Array<HTMLInputElement | null>>([]);
   const referenceTrayCloseTimeoutRef = useRef<number | null>(null);
@@ -246,6 +303,7 @@ export function FlowGeneratorBar({
   const [assetSearch, setAssetSearch] = useState("");
   const [activeReferenceIndex, setActiveReferenceIndex] = useState(0);
   const [assetPreviewUrl, setAssetPreviewUrl] = useState<string | null>(null);
+  const [assetMention, setAssetMention] = useState<AssetMentionState>(closedAssetMention);
   const [resolvedAssetReferenceUrls, setResolvedAssetReferenceUrls] = useState<Record<string, string>>({});
   const [referenceTrayOpen, setReferenceTrayOpen] = useState(false);
   const [styleTrayOpen, setStyleTrayOpen] = useState(false);
@@ -267,8 +325,14 @@ export function FlowGeneratorBar({
     videoResolutionChoices.find((option) => option.value === resolution) ?? videoResolutionChoices[0];
   const selectedDurationOption = durationOptions.find((option) => option.value === duration);
   const videoReferenceCapability = getVideoReferenceCapability(model, selectedModelOption?.label);
+  const visibleVideoReferenceSlots = videoReferenceCapability.visibleSlots ?? videoReferenceCapability.max;
+  const useDurationSlider = shouldUseVideoDurationSlider(model, selectedModelOption?.label, selectedModelOption?.providerName);
+  const durationValues = durationOptions.map((option) => Number.parseFloat(option.value)).filter(Number.isFinite);
+  const minDurationSeconds = durationValues.length ? Math.min(...durationValues) : 4;
+  const maxDurationSeconds = durationValues.length ? Math.max(...durationValues) : 15;
+  const durationSeconds = Math.max(minDurationSeconds, Math.min(maxDurationSeconds, Math.round(Number.parseFloat(duration) || 10)));
   const getVideoReferenceLabel = (index: number) => videoReferenceCapability.labels[index] ?? `参考图${index + 1}`;
-  const videoReferenceSlots = Array.from({ length: videoReferenceCapability.max }, (_, index) => ({
+  const videoReferenceSlots = Array.from({ length: visibleVideoReferenceSlots }, (_, index) => ({
     index,
     label: getVideoReferenceLabel(index),
     image: referenceImages[index],
@@ -405,17 +469,27 @@ export function FlowGeneratorBar({
 
   const handleVideoReferenceSlotChange = async (slotIndex: number, event: ChangeEvent<HTMLInputElement>) => {
     const input = event.target;
-    const file = input.files?.[0];
+    const files = Array.from(input.files ?? []);
     input.value = "";
-    if (!file) return;
+    if (!files.length) return;
 
-    const image = await readReferenceImageAsPngDataUrl(file);
-    onReferenceImagesChange((current) => {
-      const next = current.slice(0, videoReferenceCapability.max);
-      next[slotIndex] = image;
-      return next.filter(Boolean);
-    });
-    setActiveReferenceIndex(slotIndex);
+    const uploadedImages = await Promise.all(files.map((file) => readReferenceImageAsPngDataUrl(file)));
+    if (visibleVideoReferenceSlots === 1) {
+      onReferenceImagesChange((current) => {
+        const incomingImages = uploadedImages.slice(0, Math.max(0, videoReferenceCapability.max - current.length));
+        const next = appendUniqueUrls(current, incomingImages).slice(0, videoReferenceCapability.max);
+        setActiveReferenceIndex(Math.max(0, next.length - 1));
+        return next;
+      });
+    } else {
+      const image = uploadedImages[0];
+      onReferenceImagesChange((current) => {
+        const next = current.slice(0, videoReferenceCapability.max);
+        next[slotIndex] = image;
+        return next.filter(Boolean);
+      });
+      setActiveReferenceIndex(slotIndex);
+    }
   };
 
   const handleRemoveVideoReferenceSlot = (slotIndex: number) => {
@@ -444,7 +518,98 @@ export function FlowGeneratorBar({
     return referenceUrl;
   };
 
+  const getAssetReferenceIndex = (asset: FlowItem, referenceUrl?: string) => {
+    const candidates = [asset.url, referenceUrl].filter((value, index, list): value is string => Boolean(value) && list.indexOf(value) === index);
+    return referenceImages.findIndex((image) => candidates.includes(image));
+  };
+
+  const savePromptCaretOffset = () => {
+    const textarea = promptTextareaRef.current;
+    if (!textarea) return;
+    promptInsertOffsetRef.current = textarea.selectionStart ?? prompt.length;
+  };
+
+  const handlePromptChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
+    const serializedPrompt = event.target.value;
+    const previousIndexes = getPromptReferenceIndexes(prompt);
+    const nextIndexes = getPromptReferenceIndexes(serializedPrompt);
+    const removedIndexes = Array.from(previousIndexes).filter((index) => !nextIndexes.has(index));
+    const nextPrompt = reindexPromptReferencesAfterRemoval(serializedPrompt, removedIndexes);
+    onPromptChange(nextPrompt);
+    if (removedIndexes.length) {
+      onReferenceImagesChange((current) => current.filter((_, index) => !removedIndexes.includes(index)));
+      onReferenceImageRolesChange?.((roles) => {
+        const next = { ...roles };
+        for (const index of removedIndexes) {
+          const image = referenceImages[index];
+          if (image) delete next[image];
+        }
+        return next;
+      });
+      setActiveReferenceIndex((current) => Math.max(0, Math.min(current, referenceImages.length - removedIndexes.length - 1)));
+    }
+    const caret = event.target.selectionStart ?? nextPrompt.length;
+    promptInsertOffsetRef.current = caret;
+    const nextMention = getAssetMentionState(nextPrompt, caret);
+    setAssetMention(nextMention ?? closedAssetMention);
+    if (nextMention) {
+      setAssetSearch(nextMention.query);
+      onOpenGeneratorPanelChange("assets");
+    }
+  };
+
+  const handlePromptKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (assetMention.open && event.key === "Escape") {
+      event.preventDefault();
+      setAssetMention(closedAssetMention);
+      onOpenGeneratorPanelChange(null);
+      return;
+    }
+    onPromptKeyDown(event);
+  };
+
+  const handleMentionAssetSelect = async (asset: FlowItem) => {
+    const referenceUrl = await getAssetReferenceUrl(asset);
+    if (!asset.url || !referenceUrl) return;
+
+    const existingIndex = getAssetReferenceIndex(asset, referenceUrl);
+    if (existingIndex < 0 && type === "video" && referenceImages.length >= videoReferenceCapability.max) return;
+
+    const referenceIndex = existingIndex >= 0 ? existingIndex + 1 : referenceImages.length + 1;
+    const token = `@image${referenceIndex}`;
+    const replaceStart = assetMention.open ? assetMention.start : promptInsertOffsetRef.current ?? prompt.length;
+    const replaceEnd = assetMention.open ? assetMention.end : replaceStart;
+    const nextPrompt = `${prompt.slice(0, replaceStart)}${token} ${prompt.slice(replaceEnd)}`;
+
+    if (existingIndex < 0) {
+      onReferenceImagesChange((current) => {
+        const candidates = [asset.url, referenceUrl].filter((value, index, list): value is string => Boolean(value) && list.indexOf(value) === index);
+        if (current.some((image) => candidates.includes(image))) return current;
+        const next = [...current, referenceUrl].slice(0, type === "video" ? videoReferenceCapability.max : undefined);
+        setActiveReferenceIndex(next.length - 1);
+        return next;
+      });
+      onReferenceImageRolesChange?.((roles) => ({ ...roles, [referenceUrl]: roles[referenceUrl] ?? DEFAULT_REFERENCE_ROLE }));
+      void recommendReferenceRoles([referenceUrl]);
+    } else {
+      setActiveReferenceIndex(existingIndex);
+    }
+
+    onPromptChange(nextPrompt);
+    setAssetMention(closedAssetMention);
+    onOpenGeneratorPanelChange(null);
+    window.setTimeout(() => {
+      promptTextareaRef.current?.focus();
+      promptTextareaRef.current?.setSelectionRange(replaceStart + token.length + 1, replaceStart + token.length + 1);
+      promptInsertOffsetRef.current = replaceStart + token.length + 1;
+    }, 0);
+  };
+
   const handleToggleAsset = async (asset: FlowItem) => {
+    if (assetMention.open || promptInsertOffsetRef.current !== null) {
+      await handleMentionAssetSelect(asset);
+      return;
+    }
     const referenceUrl = await getAssetReferenceUrl(asset);
     if (!asset.url || !referenceUrl) return;
     setAssetPreviewUrl(referenceUrl);
@@ -489,6 +654,21 @@ export function FlowGeneratorBar({
 
   const handleReferenceRoleChange = (image: string, role: FlowReferenceRole) => {
     onReferenceImageRolesChange?.((current) => ({ ...current, [image]: role }));
+  };
+
+  const handleRemovePromptReference = (index: number) => {
+    const image = referenceImages[index];
+    const nextPrompt = reindexPromptReferencesAfterRemoval(prompt, [index]).replace(/\s{2,}/g, " ");
+    onPromptChange(nextPrompt);
+    onReferenceImagesChange((current) => current.filter((_, currentIndex) => currentIndex !== index));
+    if (image) {
+      onReferenceImageRolesChange?.((roles) => {
+        const next = { ...roles };
+        delete next[image];
+        return next;
+      });
+    }
+    setActiveReferenceIndex((current) => Math.max(0, Math.min(current, referenceImages.length - 2)));
   };
 
   const previewUrl = assetPreviewUrl ?? activeReferenceImage ?? filteredAssets[0]?.url ?? null;
@@ -744,6 +924,7 @@ export function FlowGeneratorBar({
                     }}
                     type="file"
                     accept="image/*"
+                    multiple={videoReferenceCapability.max > 1}
                     className="hidden"
                     onChange={(event) => void handleVideoReferenceSlotChange(slot.index, event)}
                   />
@@ -761,7 +942,7 @@ export function FlowGeneratorBar({
                       <>
                         <img src={getDisplayAssetUrl(slot.image)} alt={slot.label} className="absolute inset-0 h-full w-full object-cover" />
                         <div className="pointer-events-none absolute bottom-1 left-1 right-1 truncate rounded-full bg-black/65 px-1.5 py-0.5 text-center text-[10px] text-white">
-                          {slot.label}
+                          {visibleVideoReferenceSlots === 1 && referenceImages.length > 1 ? `${referenceImages.length}/${videoReferenceCapability.max}` : slot.label}
                         </div>
                       </>
                     ) : (
@@ -917,18 +1098,48 @@ export function FlowGeneratorBar({
           </div>
           )}
 
-          <div className="min-w-0 flex-1">
-        <Textarea
-          value={prompt}
-          onChange={(event) => onPromptChange(event.target.value)}
-          onKeyDown={onPromptKeyDown}
-          placeholder={placeholderText}
-          className={cn(
-            "mt-2 min-h-[64px] w-full resize-none overflow-y-auto border-0 bg-transparent px-0 py-0 text-[15px] leading-6 text-white shadow-none outline-none ring-0 ring-offset-0 placeholder:text-[#5f6778] focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 md:mt-4 md:min-h-[84px] md:leading-7",
-            isHome && "min-h-[72px] text-[16px] leading-7 placeholder:text-[#6d7688] md:min-h-[92px] md:leading-8"
-          )}
-          rows={3}
-        />
+          <div className="relative min-w-0 flex-1">
+            <Textarea
+              ref={promptTextareaRef}
+              value={prompt}
+              onChange={handlePromptChange}
+              onKeyDown={handlePromptKeyDown}
+              onKeyUp={savePromptCaretOffset}
+              onMouseUp={savePromptCaretOffset}
+              onFocus={savePromptCaretOffset}
+              placeholder={placeholderText}
+              className={cn(
+                "mt-2 min-h-[64px] w-full resize-none overflow-y-auto border-0 bg-transparent px-0 py-0 text-[15px] leading-6 text-white shadow-none outline-none ring-0 ring-offset-0 placeholder:text-[#5f6778] focus:outline-none focus:ring-0 focus:ring-offset-0 focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 md:mt-4 md:min-h-[84px] md:leading-7",
+                isHome && "min-h-[72px] text-[16px] leading-7 placeholder:text-[#6d7688] md:min-h-[92px] md:leading-8"
+              )}
+              rows={3}
+            />
+            {referenceImages.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {referenceImages.map((image, index) => (
+                  <div key={`${image}-${index}`} className="group/mention-token relative">
+                    <div className="inline-flex h-7 max-w-[180px] items-center gap-1.5 rounded-full border border-cyan-300/25 bg-cyan-300/10 pl-1 pr-7 text-xs text-cyan-50">
+                      <img src={getDisplayAssetUrl(image)} alt={`@image${index + 1}`} className="h-5 w-5 shrink-0 rounded-full object-cover" />
+                      <span>@image{index + 1}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        handleRemovePromptReference(index);
+                      }}
+                      className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition group-hover/mention-token:opacity-100"
+                      title="删除素材引用"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                    <div className="pointer-events-none absolute left-0 z-50 hidden w-[220px] rounded-xl border border-white/10 bg-[#101319] p-2 shadow-[0_20px_44px_rgba(0,0,0,0.55)] group-hover/mention-token:block [bottom:calc(100%+8px)]">
+                      <img src={getDisplayAssetUrl(image)} alt={`@image${index + 1} 预览`} className="max-h-[260px] w-full rounded-lg object-contain" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1243,24 +1454,43 @@ export function FlowGeneratorBar({
                 {type === "video" ? (
                   <div>
                     <div className="mb-3 text-sm text-[#7d8596]">视频时长</div>
-                    <div className="grid grid-cols-3 gap-2 rounded-2xl bg-[#262a33] p-2">
-                      {durationOptions.map((option) => {
-                        const selected = option.value === duration;
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => onDurationChange(option.value)}
-                            className={cn(
-                              "rounded-xl px-3 py-2 text-sm transition",
-                              selected ? "bg-white text-[#111318]" : "text-white/75 hover:bg-white/10 hover:text-white"
-                            )}
-                          >
-                            {option.label}
-                          </button>
-                        );
-                      })}
-                    </div>
+                    {useDurationSlider ? (
+                      <div className="rounded-2xl bg-[#262a33] px-4 py-3">
+                        <div className="mb-2 flex items-center justify-between text-sm">
+                          <span className="text-white/75">{minDurationSeconds}s</span>
+                          <span className="font-semibold text-white">{durationSeconds}s</span>
+                          <span className="text-white/75">{maxDurationSeconds}s</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={minDurationSeconds}
+                          max={maxDurationSeconds}
+                          step={1}
+                          value={durationSeconds}
+                          onChange={(event) => onDurationChange(`${event.currentTarget.value}s`)}
+                          className="h-2 w-full accent-cyan-400"
+                        />
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-2 rounded-2xl bg-[#262a33] p-2">
+                        {durationOptions.map((option) => {
+                          const selected = option.value === duration;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => onDurationChange(option.value)}
+                              className={cn(
+                                "rounded-xl px-3 py-2 text-sm transition",
+                                selected ? "bg-white text-[#111318]" : "text-white/75 hover:bg-white/10 hover:text-white"
+                              )}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 ) : null}
 
@@ -1297,9 +1527,14 @@ export function FlowGeneratorBar({
         </div>
 
         <div className="static">
-          <button
-            type="button"
-            onClick={() => onOpenGeneratorPanelChange(openGeneratorPanel === "assets" ? null : "assets")}
+	          <button
+	            type="button"
+	            onClick={() => {
+	              savePromptCaretOffset();
+	              promptInsertOffsetRef.current ??= prompt.length;
+	              setAssetMention(closedAssetMention);
+	              onOpenGeneratorPanelChange(openGeneratorPanel === "assets" ? null : "assets");
+	            }}
             className={cn(
               "flex h-[38px] items-center gap-2 rounded-[10px] border border-white/8 bg-[#2a2d35] px-3 text-[14px] font-medium text-[#cfd6e2] transition hover:border-white/14 hover:text-white",
               isHome && "h-10 rounded-[14px] bg-[#22262f]"
@@ -1367,6 +1602,7 @@ export function FlowGeneratorBar({
                           <button
                             key={asset.id}
                             type="button"
+                            onMouseDown={(event) => event.preventDefault()}
                             onClick={() => void handleToggleAsset(asset)}
                             onMouseEnter={() => {
                               setAssetPreviewUrl(resolvedReferenceUrl ?? asset.url ?? null);
@@ -1635,5 +1871,3 @@ export function FlowGeneratorBar({
     </div>
   );
 }
-
-

@@ -6,6 +6,7 @@ const SHARED_STATE_CHANNEL = "koala-shared-state";
 const SHARED_STATE_SOURCE_ID = Math.random().toString(36).slice(2);
 
 type SharedStateMessage = { key: string; updatedAt: number; sourceId?: string };
+type ScopedStorageWriteGuardInput = { name: string; scopedName: string; value: string; backendValue: string | null };
 
 function makeStateUrl(key: string) {
   return `${BACKEND_API}/api/app-state/${encodeURIComponent(key)}`;
@@ -19,7 +20,7 @@ async function readBackendState(key: string) {
   return typeof data.value === "string" ? data.value : null;
 }
 
-function broadcastSharedStateUpdate(key: string) {
+export function broadcastSharedStateUpdate(key: string) {
   const message: SharedStateMessage = { key, updatedAt: Date.now(), sourceId: SHARED_STATE_SOURCE_ID };
   try {
     localStorage.setItem(SHARED_STATE_EVENT_KEY, JSON.stringify(message));
@@ -142,7 +143,10 @@ export function createServerPrimaryStorage(fallback: StateStorage): StateStorage
 export function createScopedServerPrimaryStorage(
   fallback: StateStorage,
   getScopeId: () => string | undefined,
-  options?: { guestScopeId?: string }
+  options?: {
+    guestScopeId?: string;
+    shouldSkipWrite?: (input: ScopedStorageWriteGuardInput) => boolean;
+  }
 ): StateStorage<Promise<void>> {
   const resolveName = (name: string) => resolveScopedKey(name, () => getScopeId() || options?.guestScopeId);
 
@@ -163,6 +167,13 @@ export function createScopedServerPrimaryStorage(
     },
     setItem: async (name, value) => {
       const scopedName = resolveName(name);
+      let backendValue: string | null = null;
+      try {
+        backendValue = await readBackendState(scopedName);
+      } catch {
+        backendValue = null;
+      }
+      if (options?.shouldSkipWrite?.({ name, scopedName, value, backendValue })) return;
       try {
         await writeBackendState(scopedName, value);
         void removeFallbackState(fallback, scopedName).catch(() => undefined);

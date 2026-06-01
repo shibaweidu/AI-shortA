@@ -1,0 +1,8 @@
+ai.appkaola.com {
+	encode zstd gzip
+
+	@backend path /api/* /uploads/*
+	reverse_proxy @backend ai-shorta:8787
+
+	reverse_proxy ai-shorta:5173
+}

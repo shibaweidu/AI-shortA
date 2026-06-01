@@ -68,6 +68,16 @@ export const SORA_VIDEO_DURATION_OPTIONS: GeneratorOption[] = [
   { value: "12s", label: "12s" },
 ];
 
+export const SEEDANCE_VIDEO_DURATION_OPTIONS: GeneratorOption[] = Array.from({ length: 12 }, (_, index) => {
+  const seconds = index + 4;
+  return { value: `${seconds}s`, label: `${seconds}s` };
+});
+
+export const NEWAPI_VIDEO_DURATION_OPTIONS: GeneratorOption[] = Array.from({ length: 13 }, (_, index) => {
+  const seconds = index + 3;
+  return { value: `${seconds}s`, label: `${seconds}s` };
+});
+
 export const GROK_VIDEO_DURATION_OPTIONS: GeneratorOption[] = [
   { value: "10s", label: "10s" },
 ];
@@ -81,9 +91,16 @@ export function getVideoDurationOptionsForModel(model?: string, label?: string, 
   const text = `${model ?? ""} ${label ?? ""} ${providerName ?? ""}`.toLowerCase();
   if ((text.includes("geekai") || text.includes("geeknow")) && text.includes("grok-video")) return GEEKAI_GROK_VIDEO_DURATION_OPTIONS;
   if (text.includes("grok-video") || text.includes("grok-imagine-video")) return GROK_VIDEO_DURATION_OPTIONS;
+  if (text.includes("猫咪") || text.includes("seedance-2.0") || text.includes("kling-video-o-3")) return NEWAPI_VIDEO_DURATION_OPTIONS;
+  if (text.includes("sora-v3") || text.includes("sora-vip3") || text.includes("seedance")) return SEEDANCE_VIDEO_DURATION_OPTIONS;
   if (text.includes("sora")) return SORA_VIDEO_DURATION_OPTIONS;
   if (text.includes("veo")) return VEO_VIDEO_DURATION_OPTIONS;
   return VIDEO_DURATION_OPTIONS;
+}
+
+export function shouldUseVideoDurationSlider(model?: string, label?: string, providerName?: string) {
+  const text = `${model ?? ""} ${label ?? ""} ${providerName ?? ""}`.toLowerCase();
+  return text.includes("sora-v3") || text.includes("sora-vip3") || text.includes("seedance") || text.includes("kling-video-o-3") || text.includes("猫咪");
 }
 
 export function buildGeneratorModelOptions(options: ModelCatalogOption[]): GeneratorOption[] {

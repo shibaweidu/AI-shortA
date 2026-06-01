@@ -68,7 +68,7 @@ export default function LandingHome() {
   const [type, setType] = useState<FlowItemType>("image");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [resolution, setResolution] = useState("2k");
-  const [duration, setDuration] = useState("5s");
+  const [duration, setDuration] = useState("10s");
   const [generationCount, setGenerationCount] = useState(1);
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [referenceImageRoles, setReferenceImageRoles] = useState<Record<string, FlowReferenceRole>>({});
@@ -132,9 +132,12 @@ export default function LandingHome() {
   const estimatedCredits = estimatedCreditsPerItem !== undefined ? estimatedCreditsPerItem * generationCount : undefined;
   const canGenerate = (!!prompt.trim() || referenceImages.length > 0) && !!model;
 
+  const visibleProjects = currentUserId ? projects : [];
+  const visibleItems = currentUserId ? items : [];
+
   const projectCards = useMemo(() => {
-    return [...projects].sort((a, b) => b.updatedAt - a.updatedAt).map((project) => {
-      const projectItems = items.filter((item) => item.projectId === project.id);
+    return [...visibleProjects].sort((a, b) => b.updatedAt - a.updatedAt).map((project) => {
+      const projectItems = visibleItems.filter((item) => item.projectId === project.id);
       const latestCover = [...projectItems]
         .filter((item) => item.url || item.thumbnail)
         .sort((a, b) => b.createdAt - a.createdAt)[0];
@@ -148,7 +151,7 @@ export default function LandingHome() {
         latestCover,
       };
     });
-  }, [items, projects]);
+  }, [visibleItems, visibleProjects]);
 
   const visibleProjectCards = showAllProjects ? projectCards : projectCards.slice(0, 4);
   const hiddenProjectCount = Math.max(0, projectCards.length - 4);
@@ -197,7 +200,7 @@ export default function LandingHome() {
   useEffect(() => {
     if (type !== "video") return;
     if (durationOptions.some((option) => option.value === duration)) return;
-    setDuration(durationOptions[0]?.value ?? "5s");
+    setDuration(durationOptions.find((option) => option.value === "10s")?.value ?? durationOptions[0]?.value ?? "10s");
   }, [duration, durationOptions, type]);
 
   useEffect(() => {
@@ -350,10 +353,10 @@ export default function LandingHome() {
 
   return (
     <div className="relative -m-6 flex h-[calc(100%+3rem)] overflow-hidden bg-[#08090d] text-white md:-m-8 md:h-[calc(100%+4rem)]">
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-[1920px] px-4 pb-24 pt-8 md:px-12 md:pb-32 md:pt-16">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="mx-auto max-w-[1920px] px-3 pb-24 pt-6 sm:px-4 md:px-12 md:pb-32 md:pt-16">
           <section className="px-2 text-center">
-            <div className="text-[32px] font-bold tracking-tight text-white md:text-[56px] drop-shadow-2xl">
+            <div className="text-[28px] leading-tight font-bold tracking-tight text-white sm:text-[32px] md:text-[56px] drop-shadow-2xl break-words">
               {titleHighlightIndex >= 0 ? (
                 <>
                   {titlePrefix} <span className="text-[#10c8ff]">{homeHighlight}</span> {titleSuffix}
@@ -362,7 +365,7 @@ export default function LandingHome() {
                 homeTitle
               )}
             </div>
-            <p className="mx-auto mt-6 max-w-[800px] text-lg text-white/60">{homeSubtitle}</p>
+            <p className="mx-auto mt-4 max-w-[800px] text-sm leading-relaxed text-white/60 sm:text-base md:text-lg px-2">{homeSubtitle}</p>
 
             <div className="pointer-events-auto mx-auto mt-12 w-full max-w-[1200px]">
               <FlowGeneratorBar
@@ -401,8 +404,8 @@ export default function LandingHome() {
                 openGeneratorPanel={openGeneratorPanel}
                 onOpenGeneratorPanelChange={setOpenGeneratorPanel}
                 onGenerate={() => void handleGenerate()}
-                projects={projects}
-                assets={items}
+                projects={visibleProjects}
+                assets={visibleItems}
                 imageDimensions={(() => {
                   if (type === "video") {
                     const height = resolution === "1080p" ? "1080" : "720";
@@ -416,9 +419,9 @@ export default function LandingHome() {
               />
             </div>
 
-          <div className="mx-auto mt-12 max-w-[1536px] text-left">
-            <div className="mb-4 flex items-center justify-between gap-3 px-1">
-              <div>
+          <div className="mx-auto mt-12 max-w-[1536px] text-left px-2">
+            <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 px-1">
+              <div className="w-full sm:w-auto">
                 <div className="text-sm font-medium text-white">最近项目</div>
                 <div className="mt-1 text-xs text-[#7f8796]">首页生成内容会自动以当前时间创建项目。</div>
               </div>
@@ -426,7 +429,7 @@ export default function LandingHome() {
                 <button
                   type="button"
                   onClick={() => setShowAllProjects((current) => !current)}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-xs text-[#cfd6e2] transition hover:border-white/[0.14] hover:text-white"
+                  className="inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-xs text-[#cfd6e2] transition hover:border-white/[0.14] hover:text-white whitespace-nowrap"
                 >
                   <span>{showAllProjects ? "收起项目" : `展开其余 ${hiddenProjectCount} 个项目`}</span>
                   <ChevronDown className={`h-3.5 w-3.5 transition ${showAllProjects ? "rotate-180" : ""}`} />
@@ -445,7 +448,7 @@ export default function LandingHome() {
                 </div>
               </div>
             ) : (
-              <div className="grid gap-6 lg:grid-cols-4">
+              <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
                 {visibleProjectCards.map((project) => (
                   <button
                     key={project.id}
@@ -479,9 +482,9 @@ export default function LandingHome() {
                         </div>
                       )}
 
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/78 via-black/24 to-transparent px-4 pb-4 pt-12">
-                        <div className="truncate text-base font-semibold text-white">{project.name}</div>
-                        <div className="mt-1 text-xs text-white/70">
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/78 via-black/24 to-transparent px-3 pb-3 pt-12 sm:px-4 sm:pb-4">
+                        <div className="truncate text-sm sm:text-base font-semibold text-white">{project.name}</div>
+                        <div className="mt-1 text-[10px] sm:text-xs text-white/70 truncate">
                           最近更新 {new Date(project.updatedAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
                         </div>
                       </div>
@@ -506,15 +509,15 @@ export default function LandingHome() {
         </section>
 
         {hasPublishedDiscoverContent ? (
-        <section className="mt-12 mx-auto max-w-[1536px]">
+        <section className="mt-12 mx-auto max-w-[1536px] px-2">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
               {publicCategories.length > 0 ? (
                 <>
                   <button
                     type="button"
                     onClick={() => setActiveTab("")}
-                    className={`rounded-xl px-5 py-2.5 text-base font-medium transition ${
+                    className={`rounded-xl px-4 py-2 text-sm md:text-base font-medium transition whitespace-nowrap ${
                       activeTab === "" ? "bg-white/10 text-white" : "text-[#7f8796] hover:bg-white/5 hover:text-white"
                     }`}
                   >
@@ -525,7 +528,7 @@ export default function LandingHome() {
                       key={cat.id}
                       type="button"
                       onClick={() => setActiveTab(cat.id)}
-                      className={`rounded-xl px-5 py-2.5 text-base font-medium transition ${
+                      className={`rounded-xl px-4 py-2 text-sm md:text-base font-medium transition whitespace-nowrap ${
                         activeTab === cat.id ? "bg-white/10 text-white" : "text-[#7f8796] hover:bg-white/5 hover:text-white"
                       }`}
                     >
@@ -536,7 +539,7 @@ export default function LandingHome() {
               ) : null}
             </div>
 
-            <label className="flex h-12 w-full max-w-[360px] items-center gap-3 rounded-xl border border-white/10 bg-[#12141a] px-4 transition focus-within:border-white/20 focus-within:bg-[#16181f]">
+            <label className="flex h-12 w-full md:max-w-[360px] items-center gap-3 rounded-xl border border-white/10 bg-[#12141a] px-4 transition focus-within:border-white/20 focus-within:bg-[#16181f]">
               <Search className="h-4 w-4 text-[#677083]" />
               <input
                 value={discoverQuery}
@@ -560,15 +563,15 @@ export default function LandingHome() {
                     <img src={work.coverUrl} alt={work.title} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
-                    <div className="absolute left-4 top-4">
-                      <span className="rounded-full border border-white/10 bg-black/40 px-3 py-1.5 text-xs font-medium text-white/90 backdrop-blur-md">
+                    <div className="absolute left-3 top-3 sm:left-4 sm:top-4">
+                      <span className="rounded-full border border-white/10 bg-black/40 px-2.5 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-medium text-white/90 backdrop-blur-md">
                         {category?.name || "未分类"}
                       </span>
                     </div>
 
-                    <div className="absolute inset-x-0 bottom-0 p-5">
-                      <div className="text-xl font-bold tracking-wide text-white">{work.title}</div>
-                      <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-white/70">{work.prompt}</p>
+                    <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5">
+                      <div className="text-lg sm:text-xl font-bold tracking-wide text-white line-clamp-2">{work.title}</div>
+                      <p className="mt-2 line-clamp-2 text-xs sm:text-sm leading-relaxed text-white/70">{work.prompt}</p>
                     </div>
                   </div>
                 </article>

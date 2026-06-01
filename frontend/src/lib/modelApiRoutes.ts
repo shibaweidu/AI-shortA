@@ -50,6 +50,14 @@ function isYunwuProviderText(text: string) {
   return text.includes("yunw") || text.includes("云雾");
 }
 
+function isZexiProviderText(text: string) {
+  return text.includes("zexitongxue.com") || text.includes("zexi") || text.includes("泽西");
+}
+
+function isMaomiNewApiProviderText(text: string) {
+  return text.includes("seedance.dadaowushilibai.cn") || text.includes("猫咪");
+}
+
 function isQiyuanProviderText(text: string) {
   return text.includes("mingyu.it.com") || text.includes("启元") || text.includes("qiyuan");
 }
@@ -68,6 +76,9 @@ export function getDefaultModelApiRoutes(input: {
   if (input.type === "language") return uniqEndpoints(["/chat/completions"], input.type);
 
   if (input.type === "image") {
+    if (isMaomiNewApiProviderText(providerText) || modelText.includes("nano-banana-2")) {
+      return uniqEndpoints(["/chat/completions"], input.type);
+    }
     if (isQiyuanProviderText(providerText) || modelText.includes("nano-banana")) {
       return uniqEndpoints(["/chat/completions", "/images/edits"], input.type);
     }
@@ -79,15 +90,42 @@ export function getDefaultModelApiRoutes(input: {
 
   if (input.type === "video") {
     const isGrokVideo = modelText.includes("grok-imagine-video") || modelText.includes("grok-video");
+    const isMaomiNewApiVideo = isMaomiNewApiProviderText(providerText) || modelText.includes("seedance-2.0") || modelText.includes("kling-video-o-3");
+    if (isMaomiNewApiVideo) return uniqEndpoints(["/chat/completions"], input.type);
+    const isZexiSeedance = isZexiProviderText(providerText) && (modelText.includes("sora-v3") || modelText.includes("sora-vip3") || modelText.includes("seedance"));
+    if (isZexiSeedance) return uniqEndpoints(["/videos"], input.type);
     if (isYunwuProviderText(providerText) && isGrokVideo) return uniqEndpoints(["/v1/video/create"], input.type);
     if (isGrokVideo) return uniqEndpoints(["/chat/completions"], input.type);
     if (modelText.includes("sora") || modelText.includes("veo")) {
+      if (isQiyuanProviderText(providerText)) {
+        return uniqEndpoints(["/async/generations", "/videos", "/video/create"], input.type);
+      }
       return uniqEndpoints(["/videos", "/async/generations", "/video/create"], input.type);
     }
     return uniqEndpoints(["/video/generations"], input.type);
   }
 
   return [];
+}
+
+export function shouldForceDefaultModelApiRoutes(input: {
+  providerId?: string;
+  providerName?: string;
+  providerBaseUrl?: string;
+  modelId: string;
+  modelName?: string;
+  type: ModelType;
+}) {
+  const providerText = `${input.providerId ?? ""} ${input.providerName ?? ""} ${input.providerBaseUrl ?? ""}`.toLowerCase();
+  const modelText = `${input.modelId} ${input.modelName ?? ""}`.toLowerCase();
+  if (input.type === "image") return isMaomiNewApiProviderText(providerText) || modelText.includes("nano-banana-2");
+  if (input.type === "video") {
+    return isMaomiNewApiProviderText(providerText)
+      || modelText.includes("seedance-2.0")
+      || modelText.includes("kling-video-o-3")
+      || (isZexiProviderText(providerText) && (modelText.includes("sora-v3") || modelText.includes("sora-vip3") || modelText.includes("seedance")));
+  }
+  return false;
 }
 
 export function normalizeModelApiRoutes(

@@ -30,19 +30,7 @@ export default function Profile() {
 
   if (!hasHydrated) return null;
 
-  if (!currentUserId || !currentUser) {
-    return (
-      <div className="flex h-full items-center justify-center bg-[#08090d] px-4 text-white">
-        <div className="max-w-md rounded-[32px] border border-white/[0.08] bg-[#11141b] p-6 text-center">
-          <h1 className="text-xl font-semibold text-white">请先登录</h1>
-          <p className="mt-2 text-sm leading-6 text-[#8f97aa]">登录或注册账号后，才能查看个人中心。</p>
-          <Link to="/auth" className="mt-5 inline-flex h-11 items-center justify-center rounded-xl bg-cyan-400 px-5 text-sm font-medium text-black hover:bg-cyan-300">
-            登录/注册
-          </Link>
-        </div>
-      </div>
-    );
-  }
+  if (!currentUserId || !currentUser) return null;
 
   const handleUpdateEmail = () => {
     const result = updateUsername(currentUserId, email);
@@ -68,7 +56,7 @@ export default function Profile() {
 
   const handleLogout = () => {
     logout();
-    navigate("/");
+    navigate("/auth", { replace: true });
   };
 
   return (

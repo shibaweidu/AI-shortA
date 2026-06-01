@@ -2,8 +2,10 @@ import cors from "cors";
 import express from "express";
 import multer from "multer";
 import nodemailer from "nodemailer";
+import { DeleteObjectCommand, GetObjectCommand, HeadBucketCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createWriteStream } from "node:fs";
-import { appendFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createHash, randomInt } from "node:crypto";
 import { setDefaultResultOrder } from "node:dns";
 import { setDefaultAutoSelectFamily } from "node:net";
@@ -12,6 +14,8 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
 const PORT = Number(process.env.PORT ?? 8787);
+const HOST = process.env.HOST ?? "0.0.0.0";
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL ?? process.env.VITE_BACKEND_URL ?? "").trim().replace(/\/+$/, "");
 const DATA_DIR = join(process.cwd(), "data");
 const UPLOADS_DIR = join(process.cwd(), "uploads");
 const LOGS_DIR = join(process.cwd(), "logs");
@@ -19,8 +23,20 @@ const JOBS_FILE = join(DATA_DIR, "image-jobs.json");
 const APP_STATE_FILE = join(DATA_DIR, "app-state.json");
 const AGENTS_FILE = join(DATA_DIR, "agents.json");
 const EMAIL_CONFIG_FILE = join(DATA_DIR, "email-config.json");
+const STORAGE_CONFIG_FILE = join(DATA_DIR, "storage-config.json");
 const STYLE_LIBRARY_FILE = join(DATA_DIR, "style-library.json");
 const IMAGE_JOBS_LOG_FILE = join(LOGS_DIR, "image-jobs.log");
+const APP_STATE_LOG_FILE = join(LOGS_DIR, "app-state.log");
+const ADMIN_LOG_SOURCES = {
+  "image-jobs": {
+    label: "生成任务日志",
+    filePath: IMAGE_JOBS_LOG_FILE,
+  },
+  "app-state": {
+    label: "用户状态日志",
+    filePath: APP_STATE_LOG_FILE,
+  },
+} as const;
 const MAX_CONCURRENT_JOBS = Number(process.env.IMAGE_JOB_CONCURRENCY ?? 2);
 const COMPLETED_JOB_RETENTION_MS = Number(process.env.IMAGE_JOB_RETENTION_HOURS ?? 24 * 7) * 60 * 60 * 1000;
 const FAILED_JOB_RETENTION_MS = Number(process.env.FAILED_IMAGE_JOB_RETENTION_HOURS ?? 24) * 60 * 60 * 1000;
@@ -121,6 +137,24 @@ type PublicEmailConfig = Omit<EmailConfig, "password"> & {
   hasPassword: boolean;
 };
 
+type ObjectStorageConfig = {
+  enabled: boolean;
+  endpoint: string;
+  region: string;
+  bucket: string;
+  accessKeyId: string;
+  secretAccessKey: string;
+  publicBaseUrl: string;
+  prefix: string;
+  forcePathStyle: boolean;
+  useBackendProxy: boolean;
+  updatedAt: number;
+};
+
+type PublicObjectStorageConfig = Omit<ObjectStorageConfig, "secretAccessKey"> & {
+  hasSecretAccessKey: boolean;
+};
+
 type StyleCategory = {
   id: string;
   name: string;
@@ -177,6 +211,20 @@ const DEFAULT_EMAIL_CONFIG: EmailConfig = {
   fromEmail: "",
   subject: "Koala AI 注册验证码",
   codeTtlMinutes: 10,
+  updatedAt: Date.now(),
+};
+
+const DEFAULT_OBJECT_STORAGE_CONFIG: ObjectStorageConfig = {
+  enabled: process.env.S4_ENABLED === "true" || process.env.OBJECT_STORAGE_ENABLED === "true",
+  endpoint: (process.env.S4_ENDPOINT ?? process.env.OBJECT_STORAGE_ENDPOINT ?? "https://s3.bitiful.net").trim(),
+  region: (process.env.S4_REGION ?? process.env.OBJECT_STORAGE_REGION ?? "cn-east-1").trim(),
+  bucket: (process.env.S4_BUCKET ?? process.env.OBJECT_STORAGE_BUCKET ?? "").trim(),
+  accessKeyId: (process.env.S4_ACCESS_KEY_ID ?? process.env.OBJECT_STORAGE_ACCESS_KEY_ID ?? "").trim(),
+  secretAccessKey: (process.env.S4_SECRET_ACCESS_KEY ?? process.env.OBJECT_STORAGE_SECRET_ACCESS_KEY ?? "").trim(),
+  publicBaseUrl: (process.env.S4_PUBLIC_BASE_URL ?? process.env.OBJECT_STORAGE_PUBLIC_BASE_URL ?? "").trim(),
+  prefix: (process.env.S4_PREFIX ?? process.env.OBJECT_STORAGE_PREFIX ?? "kaola/").trim(),
+  forcePathStyle: process.env.S4_FORCE_PATH_STYLE !== "0" && process.env.OBJECT_STORAGE_FORCE_PATH_STYLE !== "0",
+  useBackendProxy: process.env.S4_USE_BACKEND_PROXY === "1" || process.env.OBJECT_STORAGE_USE_BACKEND_PROXY === "1",
   updatedAt: Date.now(),
 };
 
@@ -279,7 +327,9 @@ let appStateSaveChain = Promise.resolve();
 let agentsSaveChain = Promise.resolve();
 let emailConfigSaveChain = Promise.resolve();
 let styleLibrarySaveChain = Promise.resolve();
+let storageConfigSaveChain = Promise.resolve();
 let emailConfig: EmailConfig = { ...DEFAULT_EMAIL_CONFIG };
+let objectStorageConfig: ObjectStorageConfig = { ...DEFAULT_OBJECT_STORAGE_CONFIG };
 
 const REFERENCE_SETTINGS_KEY = "reference-settings";
 const DEFAULT_REFERENCE_SETTINGS: ReferenceSettings = {
@@ -302,6 +352,28 @@ app.use(cors());
 app.use(express.json({ limit: JSON_BODY_LIMIT }));
 app.use("/uploads", express.static(UPLOADS_DIR, { fallthrough: false, maxAge: "7d" }));
 
+app.get("/api/storage/object", async (request, response) => {
+  const key = typeof request.query.key === "string" ? request.query.key.trim() : "";
+  if (!key) {
+    response.status(400).json({ error: "缺少对象 Key。" });
+    return;
+  }
+
+  try {
+    await assertObjectStorageReady();
+    const data = await createObjectStorageClient().send(new GetObjectCommand({
+      Bucket: objectStorageConfig.bucket,
+      Key: key,
+    }));
+    if (data.ContentType) response.setHeader("Content-Type", data.ContentType);
+    if (data.ContentLength !== undefined) response.setHeader("Content-Length", String(data.ContentLength));
+    response.setHeader("Cache-Control", "public, max-age=604800");
+    pipeObjectStorageBody(data.Body, response);
+  } catch (error) {
+    response.status(404).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.get("/api/health", (_request, response) => {
   response.json({ ok: true, jobs: jobs.size, runningJobs, queueLength: pendingQueue.length });
 });
@@ -316,7 +388,18 @@ app.post("/api/client-log", (request, response) => {
 });
 
 app.get("/api/app-state/:key", (request, response) => {
-  response.json({ key: request.params.key, value: appState.get(request.params.key) ?? null });
+  const currentValue = appState.get(request.params.key) ?? null;
+  if (typeof currentValue === "string" && request.params.key.startsWith("ai-director-flow-v2")) {
+    const normalizedValue = normalizeFlowStateStorageUrls(currentValue);
+    if (normalizedValue !== currentValue) {
+      appState.set(request.params.key, normalizedValue);
+      logAppState("normalize-flow-storage-urls", request.params.key, normalizedValue);
+      void saveAppStateSoon();
+    }
+    response.json({ key: request.params.key, value: normalizedValue });
+    return;
+  }
+  response.json({ key: request.params.key, value: currentValue });
 });
 
 app.put("/api/app-state/:key", (request, response) => {
@@ -328,8 +411,18 @@ app.put("/api/app-state/:key", (request, response) => {
 
   if (value === null) {
     appState.delete(request.params.key);
+    logAppState("delete", request.params.key, null);
   } else {
-    appState.set(request.params.key, value);
+    if (shouldSkipEmptyFlowStateOverwrite(request.params.key, value)) {
+      logAppState("skip-empty-flow-overwrite", request.params.key, value);
+      response.json({ ok: true, skipped: true });
+      return;
+    }
+    const nextFlowState = request.params.key.startsWith("ai-director-flow-v2:")
+      ? mergeFlowStateValue(appState.get(request.params.key), value)
+      : { value, merged: false };
+    appState.set(request.params.key, nextFlowState.value);
+    logAppState(nextFlowState.merged ? "put-merged-flow" : "put", request.params.key, nextFlowState.value);
   }
   void saveAppStateSoon();
   response.json({ ok: true });
@@ -337,6 +430,7 @@ app.put("/api/app-state/:key", (request, response) => {
 
 app.delete("/api/app-state/:key", (request, response) => {
   appState.delete(request.params.key);
+  logAppState("delete", request.params.key, null);
   void saveAppStateSoon();
   response.json({ ok: true });
 });
@@ -620,6 +714,99 @@ app.post("/api/email-config/test", async (request, response) => {
   }
 });
 
+app.get("/api/admin/storage-config", (_request, response) => {
+  response.json(getPublicObjectStorageConfig());
+});
+
+app.put("/api/admin/storage-config", (request, response) => {
+  try {
+    objectStorageConfig = normalizeObjectStorageConfigInput(request.body, objectStorageConfig);
+    void saveObjectStorageConfigSoon();
+    response.json(getPublicObjectStorageConfig());
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post("/api/admin/storage-test", async (_request, response) => {
+  try {
+    await assertObjectStorageReady();
+    await createObjectStorageClient().send(new HeadBucketCommand({ Bucket: objectStorageConfig.bucket }));
+    response.json({ ok: true });
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get("/api/admin/storage-objects", async (request, response) => {
+  try {
+    await assertObjectStorageReady();
+    const prefix = normalizeStoragePrefix(typeof request.query.prefix === "string" ? request.query.prefix : objectStorageConfig.prefix);
+    const limitValue = Number.parseInt(typeof request.query.limit === "string" ? request.query.limit : "50", 10);
+    const limit = Math.max(1, Math.min(200, Number.isFinite(limitValue) ? limitValue : 50));
+    const data = await createObjectStorageClient().send(new ListObjectsV2Command({
+      Bucket: objectStorageConfig.bucket,
+      Prefix: prefix,
+      MaxKeys: limit,
+    }));
+    response.json({
+      objects: (data.Contents ?? []).map((item) => ({
+        key: item.Key ?? "",
+        size: item.Size ?? 0,
+        updatedAt: item.LastModified?.getTime() ?? 0,
+        url: item.Key ? publicUrlForObjectKey(item.Key) : "",
+      })),
+    });
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.delete("/api/admin/storage-objects", async (request, response) => {
+  const key = typeof request.query.key === "string" ? request.query.key.trim() : "";
+  if (!key) {
+    response.status(400).json({ error: "缺少对象 Key。" });
+    return;
+  }
+  try {
+    await assertObjectStorageReady();
+    await deleteObjectStorageKey(key);
+    response.json({ ok: true });
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post("/api/admin/storage-presign-upload", async (request, response) => {
+  const body = request.body as Record<string, unknown> | undefined;
+  const fileName = typeof body?.fileName === "string" && body.fileName.trim() ? body.fileName.trim() : `upload-${Date.now()}`;
+  const contentType = typeof body?.contentType === "string" && body.contentType.trim() ? body.contentType.trim() : "application/octet-stream";
+  const directory = typeof body?.directory === "string" && body.directory.trim() ? body.directory.trim() : "admin";
+
+  try {
+    await assertObjectStorageReady();
+    const extension = extname(fileName);
+    const safeName = createStorageSafeFileName(fileName, extension || ".bin");
+    const key = buildObjectStorageKey(directory, safeName);
+    const command = new PutObjectCommand({
+      Bucket: objectStorageConfig.bucket,
+      Key: key,
+      ContentType: contentType,
+    });
+    const uploadUrl = await getSignedUrl(createObjectStorageClient(), command, { expiresIn: 600 });
+    response.json({
+      method: "PUT",
+      uploadUrl,
+      key,
+      url: publicUrlForObjectKey(key),
+      headers: { "Content-Type": contentType },
+      expiresIn: 600,
+    });
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.post("/api/email-verifications/register/send", async (request, response) => {
   const email = normalizeEmail((request.body as Record<string, unknown> | undefined)?.email);
   if (!email) {
@@ -709,9 +896,15 @@ app.post("/api/uploads/images", upload.array("images", 8), async (request, respo
 
       const extension = imageExtensionFromContentType(file.mimetype);
       const fileName = `${createId("upload")}.${extension}`;
-      await writeFile(join(UPLOADS_DIR, fileName), file.buffer);
+      const url = isObjectStorageEnabled()
+        ? await putObjectStorageObject({
+            key: buildObjectStorageKey("uploads", createStorageSafeFileName(file.originalname || fileName, `.${extension}`)),
+            body: file.buffer,
+            contentType: file.mimetype,
+          })
+        : await saveLocalUploadFile(fileName, file.buffer);
       return {
-        url: publicUrlForUpload(fileName),
+        url,
         name: file.originalname,
         size: file.size,
         mimeType: file.mimetype,
@@ -1111,6 +1304,7 @@ function normalizeVideoPayloadImageFields(payload: Record<string, unknown>, medi
 function summarizeVideoPayload(payload?: Record<string, unknown>) {
   if (!payload) return undefined;
   const images = Array.isArray(payload.images) ? payload.images : undefined;
+  const inputImages = Array.isArray(payload.input_images) ? payload.input_images : undefined;
   const imageMime = getDataUrlMime(payload.image);
   const imagesMimeTypes = images
     ?.map(getDataUrlMime)
@@ -1126,13 +1320,14 @@ function summarizeVideoPayload(payload?: Record<string, unknown>) {
     seconds: payload.seconds,
     hasImage: typeof payload.image === "string" && Boolean(payload.image),
     imageCount: images?.length ?? (payload.image ? 1 : 0),
+    inputImageCount: inputImages?.length ?? 0,
     imageMime,
     imagesMimeTypes,
     hasInputReference: typeof payload.input_reference === "string" || typeof payload.inputReference === "string",
     inputReferenceMime,
     messageImageCount: messageImageMimeTypes.length,
     messageImageMimeTypes,
-    usesVideoImageFields: Boolean(payload.image || images?.length),
+    usesVideoImageFields: Boolean(payload.image || images?.length || inputImages?.length),
     hasLegacyReferenceImages: Array.isArray(payload.reference_images) || Array.isArray(payload.referenceImages),
   };
 }
@@ -1179,6 +1374,241 @@ function logImageJob(jobId: string, event: string, details?: Record<string, unkn
   void appendFile(IMAGE_JOBS_LOG_FILE, `${line}\n`, "utf8").catch((error) => {
     console.warn("[image-job] failed to write log", error);
   });
+}
+
+function summarizeAppStateValue(value: string | null) {
+  if (value === null) return { valueBytes: 0, deleted: true };
+  const summary: Record<string, unknown> = { valueBytes: value.length };
+  try {
+    const parsed = JSON.parse(value) as { state?: Record<string, unknown>; version?: unknown };
+    const state = parsed.state;
+    if (typeof parsed.version === "number") summary.version = parsed.version;
+    if (state && typeof state === "object") {
+      for (const key of ["users", "projects", "items", "accounts", "transactions", "providers"] as const) {
+        const list = state[key];
+        if (Array.isArray(list)) summary[key] = list.length;
+      }
+      if (Array.isArray(state.deletedItemIds)) summary.deletedItemIds = state.deletedItemIds.length;
+      if (typeof state.currentUserId === "string") summary.currentUserId = state.currentUserId;
+    }
+  } catch {
+    summary.parseable = false;
+  }
+  return summary;
+}
+
+function logAppState(event: string, key: string, value: string | null) {
+  const line = JSON.stringify({
+    timestamp: new Date().toISOString(),
+    event,
+    key,
+    ...summarizeAppStateValue(value),
+  });
+  console.log(`[app-state] ${line}`);
+  void appendFile(APP_STATE_LOG_FILE, `${line}\n`, "utf8").catch((error) => {
+    console.warn("[app-state] failed to write log", error);
+  });
+}
+
+function getPersistedFlowCounts(value?: string | null) {
+  if (typeof value !== "string") return null;
+  try {
+    const state = (JSON.parse(value) as { state?: { projects?: unknown; items?: unknown } }).state;
+    return {
+      projects: Array.isArray(state?.projects) ? state.projects.length : 0,
+      items: Array.isArray(state?.items) ? state.items.length : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function shouldSkipEmptyFlowStateOverwrite(key: string, nextValue: string) {
+  if (!key.startsWith("ai-director-flow-v2:")) return false;
+  const nextCounts = getPersistedFlowCounts(nextValue);
+  const currentCounts = getPersistedFlowCounts(appState.get(key));
+  return Boolean(
+    nextCounts &&
+      currentCounts &&
+      nextCounts.projects === 0 &&
+      nextCounts.items === 0 &&
+      (currentCounts.projects > 0 || currentCounts.items > 0)
+  );
+}
+
+function getRecordId(value: unknown) {
+  if (!value || typeof value !== "object") return "";
+  const id = (value as { id?: unknown }).id;
+  return typeof id === "string" ? id : "";
+}
+
+function getProjectUpdatedAt(value: unknown) {
+  if (!value || typeof value !== "object") return 0;
+  const updatedAt = (value as { updatedAt?: unknown }).updatedAt;
+  return typeof updatedAt === "number" && Number.isFinite(updatedAt) ? updatedAt : 0;
+}
+
+function flowItemRank(value: unknown) {
+  if (!value || typeof value !== "object") return 0;
+  const item = value as { status?: unknown; url?: unknown; saveError?: unknown };
+  if (item.status === "completed" && typeof item.url === "string" && item.url) return 5;
+  if (item.status === "completed") return 4;
+  if (item.status === "error" && item.saveError === "历史图片任务不存在，请重新生成。") return 1;
+  if (item.status === "error" && item.saveError === "Historical video job was not found. Please generate it again.") return 1;
+  if (item.status === "error") return 3;
+  if (item.status === "generating") return 2;
+  return 1;
+}
+
+function mergeById<T>(currentItems: T[], nextItems: T[], choose: (current: T, next: T) => T) {
+  const merged = new Map<string, T>();
+  const order: string[] = [];
+
+  for (const item of currentItems) {
+    const id = getRecordId(item);
+    if (!id) continue;
+    merged.set(id, item);
+    order.push(id);
+  }
+
+  for (const item of nextItems) {
+    const id = getRecordId(item);
+    if (!id) continue;
+    const current = merged.get(id);
+    if (!current) {
+      order.push(id);
+      merged.set(id, item);
+      continue;
+    }
+    merged.set(id, choose(current, item));
+  }
+
+  return order.map((id) => merged.get(id)).filter((item): item is T => Boolean(item));
+}
+
+function getStringList(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter((item): item is string => Boolean(item));
+}
+
+function normalizeFlowItemStorageUrl(item: unknown) {
+  if (!item || typeof item !== "object") return item;
+  const record = item as Record<string, unknown>;
+  if (typeof record.url !== "string") return item;
+  const normalizedUrl = normalizeObjectStorageResultUrl(record.url);
+  if (!normalizedUrl) return item;
+  return normalizedUrl === record.url ? item : { ...record, url: normalizedUrl };
+}
+
+function normalizeFlowItemFromBackendJob(item: unknown) {
+  const normalizedItem = normalizeFlowItemStorageUrl(item);
+  if (!normalizedItem || typeof normalizedItem !== "object") return normalizedItem;
+  const record = normalizedItem as Record<string, unknown>;
+  const id = getRecordId(record);
+  if (!id) return normalizedItem;
+  const job = jobs.get(id);
+  if (!job) return normalizedItem;
+  markImageJobTimedOutIfStale(id, job);
+  const currentJob = jobs.get(id) ?? job;
+  if (currentJob.status === "queued" || currentJob.status === "running") {
+    if (record.status === "completed" && typeof record.url === "string" && record.url) return normalizedItem;
+    const currentProgress = typeof record.progress === "number" && Number.isFinite(record.progress) ? record.progress : 0;
+    const fallbackProgress = getJobMediaType(currentJob) === "video" ? 8 : 0;
+    return {
+      ...record,
+      status: "generating",
+      progress: Math.max(currentProgress, fallbackProgress),
+      saveError: undefined,
+    };
+  }
+  if (currentJob.status === "failed" || currentJob.status === "timeout-recoverable") {
+    if (record.status === "completed" && typeof record.url === "string" && record.url) return normalizedItem;
+    return {
+      ...record,
+      status: "error",
+      progress: undefined,
+      saveError: currentJob.error || (getJobMediaType(currentJob) === "video" ? "视频生成失败。" : "图片生成失败。"),
+    };
+  }
+  if (currentJob.status !== "completed" || !currentJob.resultUrl) return normalizedItem;
+  const resultUrl = normalizeObjectStorageResultUrl(currentJob.resultUrl) ?? currentJob.resultUrl;
+  const currentUrl = typeof record.url === "string" ? record.url : "";
+  const resultObjectKey = objectStorageKeyFromUrl(resultUrl);
+  const currentObjectKey = objectStorageKeyFromUrl(currentUrl);
+  if (currentUrl && (!resultObjectKey || currentObjectKey)) return normalizedItem;
+  return {
+    ...record,
+    status: "completed",
+    url: resultUrl,
+    progress: 100,
+    saveError: undefined,
+  };
+}
+
+function normalizeFlowStateStorageUrls(value: string) {
+  try {
+    const parsed = JSON.parse(value) as { state?: Record<string, unknown>; version?: unknown };
+    const items = Array.isArray(parsed.state?.items) ? parsed.state.items : undefined;
+    if (!items) return value;
+    const normalizedItems = items.map(normalizeFlowItemFromBackendJob);
+    const changed = normalizedItems.some((item, index) => item !== items[index]);
+    if (!changed) return value;
+    return JSON.stringify({
+      ...parsed,
+      state: {
+        ...parsed.state,
+        items: normalizedItems,
+      },
+    });
+  } catch {
+    return value;
+  }
+}
+
+function mergeFlowStateValue(currentValue: string | undefined, nextValue: string) {
+  if (!currentValue) return { value: nextValue, merged: false };
+
+  try {
+    const current = JSON.parse(currentValue) as { state?: Record<string, unknown>; version?: unknown };
+    const next = JSON.parse(nextValue) as { state?: Record<string, unknown>; version?: unknown };
+    const currentProjects = Array.isArray(current.state?.projects) ? current.state.projects : undefined;
+    const nextProjects = Array.isArray(next.state?.projects) ? next.state.projects : undefined;
+    const currentItems = Array.isArray(current.state?.items) ? current.state.items.map(normalizeFlowItemFromBackendJob) : undefined;
+    const nextItems = Array.isArray(next.state?.items) ? next.state.items.map(normalizeFlowItemFromBackendJob) : undefined;
+    if (!currentProjects || !nextProjects || !currentItems || !nextItems) return { value: nextValue, merged: false };
+
+    const deletedItemIds = Array.from(new Set([
+      ...getStringList(current.state?.deletedItemIds),
+      ...getStringList(next.state?.deletedItemIds),
+    ]));
+    const isDeletedItem = (item: unknown) => deletedItemIds.includes(getRecordId(item));
+    const projects = mergeById(currentProjects, nextProjects, (currentProject, nextProject) =>
+      getProjectUpdatedAt(nextProject) >= getProjectUpdatedAt(currentProject) ? nextProject : currentProject
+    );
+    const items = mergeById(
+      currentItems.filter((item) => !isDeletedItem(item)),
+      nextItems.filter((item) => !isDeletedItem(item)),
+      (currentItem, nextItem) => flowItemRank(nextItem) >= flowItemRank(currentItem) ? nextItem : currentItem
+    );
+
+    const mergedValue = JSON.stringify({
+      ...next,
+      state: {
+        ...next.state,
+        projects,
+        items,
+        deletedItemIds,
+      },
+    });
+    return {
+      value: mergedValue,
+      merged: projects.length !== nextProjects.length || items.length !== nextItems.length || mergedValue !== nextValue,
+    };
+  } catch {
+    return { value: nextValue, merged: false };
+  }
 }
 
 function normalizeBaseUrl(baseUrl: string) {
@@ -1514,6 +1944,43 @@ function extractMediaTaskId(response: unknown, mediaType: MediaJobType): string 
   return extractAsyncTaskId(response);
 }
 
+function buildVideoTaskStatusEndpoints(taskId: string, attemptEndpoint?: string) {
+  const encodedTaskId = encodeURIComponent(taskId);
+  const officialVideoEndpoints = [
+    `/v1/videos/${encodedTaskId}`,
+    `/videos/${encodedTaskId}`,
+  ];
+  const asyncEndpoints = [
+    `/v1/async/generations/${encodedTaskId}`,
+    `/async/generations/${encodedTaskId}`,
+  ];
+  const lnapiEndpoints = [
+    `/v1/video/query?id=${encodedTaskId}`,
+    `/video/query?id=${encodedTaskId}`,
+  ];
+  const legacyEndpoints = [
+    `/v1/video/generations/${encodedTaskId}`,
+    `/video/generations/${encodedTaskId}`,
+    `/v1/video/tasks/${encodedTaskId}`,
+    `/video/tasks/${encodedTaskId}`,
+    `/v1/tasks/${encodedTaskId}`,
+    `/tasks/${encodedTaskId}`,
+  ];
+  const endpoint = (attemptEndpoint ?? "").toLowerCase();
+  const ordered = endpoint.includes("async/generations")
+    ? [...asyncEndpoints, ...officialVideoEndpoints, ...lnapiEndpoints, ...legacyEndpoints]
+    : endpoint.includes("video/create")
+      ? [...lnapiEndpoints, ...officialVideoEndpoints, ...asyncEndpoints, ...legacyEndpoints]
+      : [...officialVideoEndpoints, ...asyncEndpoints, ...lnapiEndpoints, ...legacyEndpoints];
+  return Array.from(new Set(ordered));
+}
+
+function addVideoContentUrlCandidate(response: unknown, baseUrl: string, taskId: string) {
+  if (!response || typeof response !== "object") return response;
+  const contentUrl = buildEndpoint(baseUrl, `/videos/${encodeURIComponent(taskId)}/content`);
+  return { ...(response as Record<string, unknown>), video_url: contentUrl };
+}
+
 async function fetchJsonWithTimeout(url: string, headers: Record<string, string>, timeoutMs = 30000) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -1532,14 +1999,7 @@ async function queryCompletedVideoTask(job: ImageJob, attempt: ImageJobAttempt, 
     Accept: "application/json",
     ...(job.provider.headers ?? {}),
   };
-  const taskEndpoints = [
-    `/v1/video/query?id=${encodeURIComponent(taskId)}`,
-    `/video/query?id=${encodeURIComponent(taskId)}`,
-    `/v1/videos/${taskId}`,
-    `/videos/${taskId}`,
-    `/v1/async/generations/${taskId}`,
-    `/async/generations/${taskId}`,
-  ];
+  const taskEndpoints = buildVideoTaskStatusEndpoints(taskId, attempt.endpoint);
 
   for (const taskPath of taskEndpoints) {
     const taskUrl = buildEndpoint(job.provider.baseUrl, taskPath);
@@ -1560,6 +2020,12 @@ async function queryCompletedVideoTask(job: ImageJob, attempt: ImageJobAttempt, 
       });
       if (!response.ok) continue;
       if (extractVideoUrls(payload).length > 0) return payload;
+      if (payload && typeof payload === "object") {
+        const record = payload as Record<string, unknown>;
+        if (isCompletedTaskStatus(record.status ?? record.state)) {
+          return addVideoContentUrlCandidate(payload, job.provider.baseUrl, taskId);
+        }
+      }
     } catch (error) {
       logImageJob(job.id, "attempt.completed-task-query-error", {
         label: attempt.label,
@@ -1588,22 +2054,7 @@ async function pollAsyncTask(job: ImageJob, attempt: ImageJobAttempt, taskId: st
  ...(job.provider.headers ?? {}),
  };
  
- // Try common task status endpoints
- // Priority order: New API standard > OpenAI standard > fallback
- const taskEndpoints = mediaType === "video" ? [
- `/v1/videos/${taskId}`,
- `/videos/${taskId}`,
- `/v1/async/generations/${taskId}`,
- `/async/generations/${taskId}`,
- `/v1/video/generations/${taskId}`,
- `/video/generations/${taskId}`,
- `/v1/video/tasks/${taskId}`,
- `/video/tasks/${taskId}`,
- `/v1/video/query?id=${encodeURIComponent(taskId)}`,
- `/video/query?id=${encodeURIComponent(taskId)}`,
- `/v1/tasks/${taskId}`,
- `/tasks/${taskId}`,
- ] : [
+ const taskEndpoints = mediaType === "video" ? buildVideoTaskStatusEndpoints(taskId, attempt.endpoint) : [
  `/v1/images/tasks/${taskId}`, // New API standard endpoint (documented)
  `/images/tasks/${taskId}`, // New API without /v1
  `/v1/tasks/${taskId}`, // Generic tasks endpoint
@@ -1738,12 +2189,21 @@ async function pollAsyncTask(job: ImageJob, attempt: ImageJobAttempt, taskId: st
  });
  
  const response = await fetch(taskUrl, { headers });
+ const responseText = await response.text();
  if (!response.ok) {
- if (!workingEndpoint) continue; // Try next endpoint
- throw new Error(`Task status endpoint returned ${response.status}`);
+ logImageJob(job.id, "attempt.poll-status-error", {
+ label: attempt.label,
+ taskId,
+ pollAttempt: i + 1,
+ taskUrl,
+ status: response.status,
+ statusText: response.statusText,
+ responsePreview: sanitizeText(responseText, 500),
+ });
+ if (workingEndpoint) workingEndpoint = null;
+ continue;
  }
  
- const responseText = await response.text();
  const taskResponse = parseJsonOrText(responseText);
  
  if (!taskResponse || typeof taskResponse !== "object") {
@@ -1779,6 +2239,9 @@ async function pollAsyncTask(job: ImageJob, attempt: ImageJobAttempt, taskId: st
 
   // Check if task is completed
   if (obj.status === "completed" || obj.status === "succeeded" || obj.status === "success") {
+  const completedResponse = mediaType === "video" && taskMediaUrls.length === 0
+    ? addVideoContentUrlCandidate(taskResponse, job.provider.baseUrl, taskId)
+    : taskResponse;
   logImageJob(job.id, "attempt.poll-completed", { 
   label: attempt.label,
   mediaType,
@@ -1787,7 +2250,7 @@ async function pollAsyncTask(job: ImageJob, attempt: ImageJobAttempt, taskId: st
   taskUrl,
   responsePreview: sanitizeText(responseText, 500)
   });
-  return taskResponse;
+  return completedResponse;
   }
  
  // Check if task failed
@@ -1808,8 +2271,15 @@ async function pollAsyncTask(job: ImageJob, attempt: ImageJobAttempt, taskId: st
  break; // Break inner loop, continue polling
  } catch (error) {
  if (workingEndpoint) {
- // Working endpoint failed, this is a real error
- throw error;
+ logImageJob(job.id, "attempt.poll-working-endpoint-error", {
+ label: attempt.label,
+ taskId,
+ pollAttempt: i + 1,
+ endpoint: workingEndpoint,
+ ...getErrorDetails(error),
+ });
+ workingEndpoint = null;
+ continue;
  }
  // Try next endpoint
  if (taskPath === endpointsToTry[endpointsToTry.length - 1]) {
@@ -1901,6 +2371,203 @@ function getPublicEmailConfig(): PublicEmailConfig {
     updatedAt: emailConfig.updatedAt,
     hasPassword: Boolean(emailConfig.password),
   };
+}
+
+function normalizeStoragePrefix(value: unknown) {
+  if (typeof value !== "string") return "";
+  const normalized = value
+    .trim()
+    .replace(/^\/+/, "")
+    .replace(/\/{2,}/g, "/");
+  return normalized && !normalized.endsWith("/") ? `${normalized}/` : normalized;
+}
+
+function normalizeObjectStorageConfigInput(value: unknown, current: ObjectStorageConfig) {
+  const body = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const next: ObjectStorageConfig = { ...current };
+
+  if (typeof body.enabled === "boolean") next.enabled = body.enabled;
+  if (typeof body.endpoint === "string") next.endpoint = body.endpoint.trim().replace(/\/+$/, "");
+  if (typeof body.region === "string") next.region = body.region.trim() || DEFAULT_OBJECT_STORAGE_CONFIG.region;
+  if (typeof body.bucket === "string") next.bucket = body.bucket.trim();
+  if (typeof body.accessKeyId === "string") next.accessKeyId = body.accessKeyId.trim();
+  if (typeof body.secretAccessKey === "string" && body.secretAccessKey.length > 0) next.secretAccessKey = body.secretAccessKey;
+  if (body.clearSecretAccessKey === true) next.secretAccessKey = "";
+  if (typeof body.publicBaseUrl === "string") next.publicBaseUrl = body.publicBaseUrl.trim().replace(/\/+$/, "");
+  if (typeof body.prefix === "string") next.prefix = normalizeStoragePrefix(body.prefix);
+  if (typeof body.forcePathStyle === "boolean") next.forcePathStyle = body.forcePathStyle;
+  if (typeof body.useBackendProxy === "boolean") next.useBackendProxy = body.useBackendProxy;
+
+  if (next.enabled) {
+    const error = getObjectStorageConfigError(next);
+    if (error) throw new Error(error);
+  }
+  next.updatedAt = Date.now();
+  return next;
+}
+
+function normalizeObjectStorageConfigFromFile(value: unknown) {
+  try {
+    const loaded = normalizeObjectStorageConfigInput(value, DEFAULT_OBJECT_STORAGE_CONFIG);
+    if (value && typeof value === "object") {
+      const updatedAt = (value as Record<string, unknown>).updatedAt;
+      if (typeof updatedAt === "number" && Number.isFinite(updatedAt)) loaded.updatedAt = updatedAt;
+    }
+    return loaded;
+  } catch {
+    return { ...DEFAULT_OBJECT_STORAGE_CONFIG };
+  }
+}
+
+function getPublicObjectStorageConfig(): PublicObjectStorageConfig {
+  return {
+    enabled: objectStorageConfig.enabled,
+    endpoint: objectStorageConfig.endpoint,
+    region: objectStorageConfig.region,
+    bucket: objectStorageConfig.bucket,
+    accessKeyId: objectStorageConfig.accessKeyId,
+    publicBaseUrl: objectStorageConfig.publicBaseUrl,
+    prefix: objectStorageConfig.prefix,
+    forcePathStyle: objectStorageConfig.forcePathStyle,
+    useBackendProxy: objectStorageConfig.useBackendProxy,
+    updatedAt: objectStorageConfig.updatedAt,
+    hasSecretAccessKey: Boolean(objectStorageConfig.secretAccessKey),
+  };
+}
+
+function getObjectStorageConfigError(config = objectStorageConfig) {
+  if (!config.endpoint) return "请填写对象存储 Endpoint。";
+  if (!config.region) return "请填写对象存储 Region。";
+  if (!config.bucket) return "请填写 Bucket。";
+  if (!config.accessKeyId) return "请填写 Access Key ID。";
+  if (!config.secretAccessKey) return "请填写 Secret Access Key。";
+  return "";
+}
+
+async function assertObjectStorageReady() {
+  if (!objectStorageConfig.enabled) throw new Error("对象存储尚未启用。");
+  const error = getObjectStorageConfigError();
+  if (error) throw new Error(error);
+}
+
+function createObjectStorageClient() {
+  return new S3Client({
+    region: objectStorageConfig.region || DEFAULT_OBJECT_STORAGE_CONFIG.region,
+    endpoint: objectStorageConfig.endpoint,
+    forcePathStyle: objectStorageConfig.forcePathStyle,
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    credentials: {
+      accessKeyId: objectStorageConfig.accessKeyId,
+      secretAccessKey: objectStorageConfig.secretAccessKey,
+    },
+  });
+}
+
+function isObjectStorageEnabled() {
+  return objectStorageConfig.enabled && !getObjectStorageConfigError();
+}
+
+function createStorageSafeFileName(fileName: string, fallbackExtension: string) {
+  const extension = extname(fileName) || fallbackExtension;
+  const baseName = basename(fileName, extname(fileName))
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "asset";
+  return `${baseName}-${createId("obj")}${extension}`;
+}
+
+function buildObjectStorageKey(directory: string, fileName: string) {
+  const safeDirectory = directory
+    .trim()
+    .replace(/^\/+|\/+$/g, "")
+    .replace(/[^a-zA-Z0-9/_-]+/g, "-")
+    .replace(/\/{2,}/g, "/");
+  return `${objectStorageConfig.prefix}${safeDirectory ? `${safeDirectory}/` : ""}${fileName}`.replace(/^\/+/, "");
+}
+
+function publicUrlForObjectKey(key: string) {
+  const encodedKey = key.split("/").map((part) => encodeURIComponent(part)).join("/");
+  const proxyPath = `/api/storage/object?key=${encodeURIComponent(key)}`;
+  if (objectStorageConfig.useBackendProxy) return PUBLIC_BASE_URL ? `${PUBLIC_BASE_URL}${proxyPath}` : proxyPath;
+  if (objectStorageConfig.publicBaseUrl) return `${objectStorageConfig.publicBaseUrl}/${encodedKey}`;
+  try {
+    const endpoint = new URL(objectStorageConfig.endpoint);
+    return `${endpoint.protocol}//${objectStorageConfig.bucket}.${endpoint.host}/${encodedKey}`;
+  } catch {
+    return PUBLIC_BASE_URL ? `${PUBLIC_BASE_URL}${proxyPath}` : proxyPath;
+  }
+}
+
+function objectStorageKeyFromUrl(url?: string) {
+  if (!url) return "";
+  if (!objectStorageConfig.bucket) return "";
+  const tryDecodePath = (value: string) => decodeURIComponent(value.replace(/^\/+/, ""));
+  try {
+    const parsed = new URL(url);
+    if (parsed.pathname === "/api/storage/object" && parsed.searchParams.get("key")) {
+      return parsed.searchParams.get("key") ?? "";
+    }
+    if (objectStorageConfig.publicBaseUrl) {
+      const publicBase = new URL(objectStorageConfig.publicBaseUrl);
+      const basePath = publicBase.pathname.replace(/\/+$/, "");
+      if (parsed.origin === publicBase.origin && (!basePath || parsed.pathname.startsWith(`${basePath}/`))) {
+        return tryDecodePath(basePath ? parsed.pathname.slice(basePath.length + 1) : parsed.pathname);
+      }
+    }
+    const endpoint = new URL(objectStorageConfig.endpoint);
+    if (parsed.host === `${objectStorageConfig.bucket}.${endpoint.host}`) return tryDecodePath(parsed.pathname);
+    if (parsed.host === endpoint.host && parsed.pathname.startsWith(`/${objectStorageConfig.bucket}/`)) {
+      return tryDecodePath(parsed.pathname.slice(objectStorageConfig.bucket.length + 2));
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function normalizeObjectStorageResultUrl(url?: string) {
+  const objectKey = objectStorageKeyFromUrl(url);
+  return objectKey ? publicUrlForObjectKey(objectKey) : url;
+}
+
+function pipeObjectStorageBody(body: unknown, response: express.Response) {
+  if (!body) {
+    response.end();
+    return;
+  }
+  if (body instanceof Uint8Array) {
+    response.end(Buffer.from(body));
+    return;
+  }
+  if (typeof (body as { pipe?: unknown }).pipe === "function") {
+    (body as NodeJS.ReadableStream).pipe(response);
+    return;
+  }
+  if (typeof ReadableStream !== "undefined" && body instanceof ReadableStream) {
+    Readable.fromWeb(body as any).pipe(response);
+    return;
+  }
+  response.end(String(body));
+}
+
+async function putObjectStorageObject(input: { key: string; body: Buffer | Readable; contentType?: string; contentLength?: number }) {
+  await assertObjectStorageReady();
+  await createObjectStorageClient().send(new PutObjectCommand({
+    Bucket: objectStorageConfig.bucket,
+    Key: input.key,
+    Body: input.body,
+    ContentType: input.contentType || "application/octet-stream",
+    ...(input.contentLength !== undefined ? { ContentLength: input.contentLength } : {}),
+  }));
+  return publicUrlForObjectKey(input.key);
+}
+
+async function deleteObjectStorageKey(key: string) {
+  await assertObjectStorageReady();
+  await createObjectStorageClient().send(new DeleteObjectCommand({
+    Bucket: objectStorageConfig.bucket,
+    Key: key,
+  }));
 }
 
 function getEmailConfigError() {
@@ -2123,6 +2790,14 @@ async function ensureDataFiles() {
   }
 
   try {
+    const raw = await readFile(STORAGE_CONFIG_FILE, "utf8");
+    objectStorageConfig = normalizeObjectStorageConfigFromFile(JSON.parse(raw));
+  } catch {
+    objectStorageConfig = { ...DEFAULT_OBJECT_STORAGE_CONFIG };
+    await writeFile(STORAGE_CONFIG_FILE, JSON.stringify(objectStorageConfig, null, 2), "utf8");
+  }
+
+  try {
     const raw = await readFile(STYLE_LIBRARY_FILE, "utf8");
     styleLibrary = normalizeStyleLibraryFromFile(JSON.parse(raw));
   } catch {
@@ -2200,6 +2875,18 @@ function saveEmailConfigSoon() {
   return emailConfigSaveChain;
 }
 
+function saveObjectStorageConfigSoon() {
+  storageConfigSaveChain = storageConfigSaveChain.then(async () => {
+    await mkdir(dirname(STORAGE_CONFIG_FILE), { recursive: true });
+    const tempFile = `${STORAGE_CONFIG_FILE}.tmp`;
+    await writeFile(tempFile, JSON.stringify(objectStorageConfig, null, 2), "utf8");
+    await rename(tempFile, STORAGE_CONFIG_FILE);
+  }).catch((error) => {
+    console.error("[storage-config] failed to save config", error);
+  });
+  return storageConfigSaveChain;
+}
+
 function saveStyleLibrarySoon() {
   styleLibrarySaveChain = styleLibrarySaveChain.then(async () => {
     await mkdir(dirname(STYLE_LIBRARY_FILE), { recursive: true });
@@ -2214,6 +2901,12 @@ function saveStyleLibrarySoon() {
 
 function publicUrlForUpload(fileName: string) {
   return `/uploads/${fileName}`;
+}
+
+async function saveLocalUploadFile(fileName: string, buffer: Buffer) {
+  await mkdir(UPLOADS_DIR, { recursive: true });
+  await writeFile(join(UPLOADS_DIR, fileName), buffer);
+  return publicUrlForUpload(fileName);
 }
 
 function getImageJobTimeoutMs(job?: ImageJob) {
@@ -2248,8 +2941,12 @@ function uploadPathFromResultUrl(resultUrl?: string) {
 
 async function deleteJobAsset(job: ImageJob) {
   const uploadPath = uploadPathFromResultUrl(job.resultUrl);
-  if (!uploadPath) return;
-  await rm(uploadPath, { force: true });
+  if (uploadPath) {
+    await rm(uploadPath, { force: true });
+    return;
+  }
+  const objectKey = objectStorageKeyFromUrl(job.resultUrl);
+  if (objectKey && isObjectStorageEnabled()) await deleteObjectStorageKey(objectKey);
 }
 
 function getErrorDetails(error: unknown) {
@@ -2296,8 +2993,15 @@ async function saveMediaResult(jobId: string, mediaUrl: string, mediaType: Media
     if (!parsed) throw new Error(`Invalid data URL ${mediaType} result`);
     const extension = mediaExtensionFromContentType(mediaType, parsed.mimeType);
     const fileName = `${jobId}.${extension}`;
-    await writeFile(join(UPLOADS_DIR, fileName), Buffer.from(parsed.data, "base64"));
-    return publicUrlForUpload(fileName);
+    const buffer = Buffer.from(parsed.data, "base64");
+    if (isObjectStorageEnabled()) {
+      return putObjectStorageObject({
+        key: buildObjectStorageKey(mediaType === "video" ? "generated/videos" : "generated/images", fileName),
+        body: buffer,
+        contentType: parsed.mimeType,
+      });
+    }
+    return saveLocalUploadFile(fileName, buffer);
   }
 
   const startedAt = Date.now();
@@ -2346,6 +3050,17 @@ async function saveMediaResult(jobId: string, mediaUrl: string, mediaType: Media
   }
   const extension = mediaExtensionFromContentType(mediaType, response.headers.get("content-type")) || pathExtension || (mediaType === "video" ? "mp4" : "png");
   const fileName = `${jobId}.${extension}`;
+  const contentLengthHeader = response.headers.get("content-length");
+  const contentLength = contentLengthHeader ? Number(contentLengthHeader) : undefined;
+  if (isObjectStorageEnabled()) {
+    const normalizedContentLength = Number.isFinite(contentLength) && contentLength && contentLength > 0 ? contentLength : undefined;
+    return putObjectStorageObject({
+      key: buildObjectStorageKey(mediaType === "video" ? "generated/videos" : "generated/images", fileName),
+      body: Readable.fromWeb(response.body as any),
+      contentType: response.headers.get("content-type") || undefined,
+      contentLength: normalizedContentLength,
+    });
+  }
   await pipeline(Readable.fromWeb(response.body as any), createWriteStream(join(UPLOADS_DIR, fileName)));
   return publicUrlForUpload(fileName);
 }
@@ -2471,13 +3186,14 @@ function getJobRecoveryMetadata(job: ImageJob) {
 }
 
 function getJobResponse(job: ImageJob) {
+  const resultUrl = normalizeObjectStorageResultUrl(job.resultUrl);
   return {
     id: job.id,
     status: job.status,
     mediaType: getJobMediaType(job),
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
-    resultUrl: job.resultUrl,
+    resultUrl,
     upstreamUrl: job.upstreamUrl,
     error: job.error,
   };
@@ -2488,6 +3204,39 @@ function getRecoverableJobResponse(job: ImageJob) {
     ...getJobResponse(job),
     request: getJobRecoveryMetadata(job),
   };
+}
+
+function redactLogLine(line: string) {
+  return line
+    .replace(/(authorization["']?\s*[:=]\s*["']?Bearer\s+)[^"',\s}]+/gi, "$1<redacted>")
+    .replace(/((?:api[-_ ]?key|access[-_ ]?token|refresh[-_ ]?token|cookie|password|secret)["']?\s*[:=]\s*["']?)[^"',\s}]+/gi, "$1<redacted>")
+    .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]{16,}/g, "$1<redacted>");
+}
+
+async function readLogTail(filePath: string, maxLines: number, query = "") {
+  try {
+    const stats = await stat(filePath);
+    const maxBytes = 1024 * 1024 * 4;
+    const raw = await readFile(filePath, "utf8");
+    const clipped = raw.length > maxBytes ? raw.slice(raw.length - maxBytes) : raw;
+    const normalizedQuery = query.trim().toLowerCase();
+    const lines = clipped
+      .split(/\r?\n/)
+      .filter((line) => line.length > 0)
+      .filter((line) => !normalizedQuery || line.toLowerCase().includes(normalizedQuery));
+    return {
+      lines: lines.slice(-maxLines).map(redactLogLine),
+      size: stats.size,
+      updatedAt: stats.mtimeMs,
+      truncated: raw.length > maxBytes || lines.length > maxLines,
+      query: normalizedQuery,
+    };
+  } catch (error) {
+    if (error && typeof error === "object" && (error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { lines: [], size: 0, updatedAt: 0, truncated: false, query };
+    }
+    throw error;
+  }
 }
 
 function scheduleJob(jobId: string) {
@@ -3160,6 +3909,29 @@ app.get("/api/image-jobs", (request, response) => {
   response.json({ jobs: filteredJobs });
 });
 
+app.get("/api/admin/logs", async (request, response) => {
+  const rawSource = typeof request.query.source === "string" ? request.query.source : "image-jobs";
+  const sourceKey = Object.prototype.hasOwnProperty.call(ADMIN_LOG_SOURCES, rawSource)
+    ? rawSource as keyof typeof ADMIN_LOG_SOURCES
+    : "image-jobs";
+  const source = ADMIN_LOG_SOURCES[sourceKey];
+  const linesValue = Number.parseInt(typeof request.query.lines === "string" ? request.query.lines : "300", 10);
+  const maxLines = Math.max(50, Math.min(2000, Number.isFinite(linesValue) ? linesValue : 300));
+  const query = typeof request.query.q === "string" ? request.query.q : "";
+
+  try {
+    const log = await readLogTail(source.filePath, maxLines, query);
+    response.json({
+      source: sourceKey,
+      label: source.label,
+      sources: Object.entries(ADMIN_LOG_SOURCES).map(([id, value]) => ({ id, label: value.label })),
+      ...log,
+    });
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.post("/api/image-jobs", upload.none(), (request, response) => {
   const body = request.body as Record<string, unknown>;
   const provider = body.provider as Record<string, unknown> | undefined;
@@ -3455,8 +4227,8 @@ void cleanupExpiredJobs();
 cleanupExpiredEmailVerificationRecords();
 setInterval(() => void cleanupExpiredJobs(), 60 * 60 * 1000);
 setInterval(cleanupExpiredEmailVerificationRecords, 60 * 1000);
-app.listen(PORT, () => {
-  console.log(`[backend] listening on http://127.0.0.1:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`[backend] listening on http://${HOST}:${PORT}`);
   console.log(`[backend] loaded ${jobs.size} image jobs`);
   console.log(`[backend] loaded ${agents.size} agents`);
   console.log(`[backend] loaded ${styleLibrary.styles.length} style presets`);

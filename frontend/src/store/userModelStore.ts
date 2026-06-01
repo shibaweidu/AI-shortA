@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist, type PersistOptions } from "zustand/middleware";
-import { getDefaultModelApiRoutes, normalizeModelApiRoutes } from "../lib/modelApiRoutes";
+import { getDefaultModelApiRoutes, normalizeModelApiRoutes, shouldForceDefaultModelApiRoutes } from "../lib/modelApiRoutes";
 import { buildProviderModelValue, getProviderModelLookupValues } from "../lib/providerModels";
 import { createBackendBackedStorage, createLocalStorageStateStorage } from "../lib/sharedStateStorage";
 import type { ModelType, ProviderConfig, ProviderModel, RoutingConfig } from "./settingsStore";
@@ -55,6 +55,14 @@ function normalizeModel(model: unknown, fallbackType: ModelType, provider?: Part
     modelName: String(raw.name),
     type: fallbackType,
   });
+  const forceDefaultApiRoutes = shouldForceDefaultModelApiRoutes({
+    providerId: provider?.id,
+    providerName: provider?.name,
+    providerBaseUrl: provider?.baseUrl,
+    modelId: String(raw.id),
+    modelName: String(raw.name),
+    type: fallbackType,
+  });
   return {
     id: String(raw.id),
     name: String(raw.name),
@@ -64,7 +72,7 @@ function normalizeModel(model: unknown, fallbackType: ModelType, provider?: Part
     credits: typeof raw.credits === "number" ? raw.credits : undefined,
     description: typeof raw.description === "string" ? raw.description : undefined,
     tags: Array.isArray(raw.tags) ? raw.tags.filter((tag): tag is string => typeof tag === "string") : undefined,
-    apiRoutes: normalizeModelApiRoutes(raw.apiRoutes, fallbackApiRoutes, fallbackType),
+    apiRoutes: forceDefaultApiRoutes ? fallbackApiRoutes : normalizeModelApiRoutes(raw.apiRoutes, fallbackApiRoutes, fallbackType),
   };
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { KeyRound, Lock, Mail, UserPlus } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -10,6 +10,7 @@ type AuthMode = "login" | "register";
 
 export default function Auth() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUserId, hasHydrated, login, register, users } = useAuthStore();
   const [mode, setMode] = useState<AuthMode>("login");
   const [displayName, setDisplayName] = useState("");
@@ -30,8 +31,13 @@ export default function Auth() {
     return () => window.clearInterval(timer);
   }, [cooldown]);
 
+  const fromPath = typeof location.state === "object" && location.state && "from" in location.state
+    ? (location.state.from as { pathname?: string })?.pathname
+    : undefined;
+  const redirectTo = fromPath && fromPath !== "/auth" ? fromPath : "/profile";
+
   if (!hasHydrated) return null;
-  if (currentUserId) return <Navigate to="/credits" replace />;
+  if (currentUserId) return <Navigate to={redirectTo} replace />;
 
   const email = username.trim().toLowerCase();
   const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -72,7 +78,7 @@ export default function Auth() {
         setMessage(result.message);
         return;
       }
-      navigate("/credits", { replace: true });
+      navigate(redirectTo, { replace: true });
       return;
     }
 
@@ -106,17 +112,17 @@ export default function Auth() {
     setMessage("");
     try {
       await verifyRegistrationEmailCode(email, emailCode.trim());
-      const result = register({ username: email, password, displayName });
+      const result = register({ username: email, password, displayName: displayName.trim() });
       if (!result.ok) {
         setMessageType("error");
         setMessage(result.message);
+        setSubmitting(false);
         return;
       }
-      navigate("/credits", { replace: true });
+      navigate(redirectTo, { replace: true });
     } catch (error) {
       setMessageType("error");
       setMessage(error instanceof Error ? error.message : String(error));
-    } finally {
       setSubmitting(false);
     }
   };
@@ -187,8 +193,13 @@ export default function Auth() {
               {message}
             </div>
           ) : null}
-          <Button type="button" onClick={() => void submit()} disabled={submitting} className="h-12 w-full rounded-xl bg-cyan-400 text-black hover:bg-cyan-300">
-            {mode === "login" ? "登录" : "注册并登录"}
+          <Button
+            type="button"
+            onClick={() => void submit()}
+            disabled={submitting || (mode === "register" && (!validEmail || !displayName.trim() || !/^\d{6}$/.test(emailCode.trim()) || !password || password.length < 6))}
+            className="h-12 w-full rounded-xl bg-cyan-400 text-black hover:bg-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {submitting ? "处理中..." : mode === "login" ? "登录" : "注册并登录"}
           </Button>
         </div>
 

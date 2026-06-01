@@ -12,6 +12,7 @@ const VIDEO_TASK_POLL_INTERVAL_MS = 3000;
 const VIDEO_TASK_MAX_POLLS = 120;
 const IMAGE_JOB_POLL_INTERVAL_MS = 2000;
 const IMAGE_JOB_MAX_POLLS = 300;
+const VIDEO_JOB_MAX_POLLS = 900;
 export const MISSING_IMAGE_JOB_STATUS = "missing";
 
 type BackendImageJobResponse = {
@@ -139,6 +140,36 @@ function isSoraModel(model: ProviderModel) {
   return `${model.id} ${model.name}`.toLowerCase().includes("sora");
 }
 
+function isZexiProvider(provider: ProviderConfig) {
+  const value = `${provider.id} ${provider.name} ${provider.baseUrl}`.toLowerCase();
+  return value.includes("zexitongxue.com") || value.includes("zexi") || value.includes("泽西");
+}
+
+function isMaomiNewApiProvider(provider: ProviderConfig) {
+  const value = `${provider.id} ${provider.name} ${provider.baseUrl}`.toLowerCase();
+  return value.includes("seedance.dadaowushilibai.cn") || value.includes("猫咪");
+}
+
+function isMaomiNewApiImageModel(model: ProviderModel) {
+  const value = `${model.id} ${model.name}`.toLowerCase();
+  return value.includes("nano-banana-2");
+}
+
+function isMaomiNewApiVideoModel(model: ProviderModel) {
+  const value = `${model.id} ${model.name}`.toLowerCase();
+  return value.includes("seedance-2.0") || value.includes("kling-video-o-3");
+}
+
+function isZexiSeedanceModel(model: ProviderModel) {
+  const value = `${model.id} ${model.name}`.toLowerCase();
+  return value.includes("sora-v3") || value.includes("sora-vip3") || value.includes("seedance");
+}
+
+function getZexiSeedanceMaxReferenceImages(model: ProviderModel) {
+  const value = `${model.id} ${model.name}`.toLowerCase();
+  return value.includes("sora-vip3") ? 9 : 4;
+}
+
 function isVeoModel(model: ProviderModel) {
   return `${model.id} ${model.name}`.toLowerCase().includes("veo");
 }
@@ -244,6 +275,12 @@ function normalizeSoraDuration(duration: number) {
   return 8;
 }
 
+function normalizeZexiSeedanceDuration(duration: number) {
+  const rounded = Math.round(duration);
+  if (!Number.isFinite(rounded)) return 5;
+  return Math.max(4, Math.min(15, rounded));
+}
+
 function normalizeGrokVideoDuration(duration: number, provider?: ProviderConfig) {
   const providerText = `${provider?.id ?? ""} ${provider?.name ?? ""} ${provider?.baseUrl ?? ""}`.toLowerCase();
   if ((providerText.includes("geekai") || providerText.includes("geeknow.top") || providerText.includes("geeknow.ai")) && Math.round(duration) === 6) return 6;
@@ -280,6 +317,9 @@ function normalizeSingleImageVideoPayload(payload: Record<string, unknown>) {
 }
 
 function getModelApiEndpoints(provider: ProviderConfig, model: ProviderModel, type: ModelType): ModelApiEndpoint[] {
+  if (type === "image" && (isMaomiNewApiProvider(provider) || isMaomiNewApiImageModel(model))) return ["/chat/completions"];
+  if (type === "video" && (isMaomiNewApiProvider(provider) || isMaomiNewApiVideoModel(model))) return ["/chat/completions"];
+  if (type === "video" && isZexiProvider(provider) && isZexiSeedanceModel(model)) return ["/videos"];
   const configured = getEnabledModelApiEndpoints(model, type);
   if (configured.length) return configured;
   return getDefaultModelApiRoutes({
@@ -911,6 +951,73 @@ function buildQiyuanChatImagePayload(modelId: string, prompt: string, referenceI
   );
 }
 
+function getModelBaseId(modelId: string) {
+  return modelId.split("+")[0] || modelId;
+}
+
+function normalizeNewApiImageResolution(resolution?: string, size?: string) {
+  if (resolution === "4k") return "4K";
+  if (resolution === "2k") return "2K";
+  if (resolution === "1k") return "1K";
+  if (size) {
+    const maxDim = Math.max(...size.split("x").map((part) => Number.parseInt(part, 10)).filter(Number.isFinite));
+    if (maxDim >= 2048) return "4K";
+    if (maxDim >= 1536) return "2K";
+  }
+  return "1K";
+}
+
+function normalizeNewApiVideoResolution(modelId: string, resolution?: string) {
+  const baseModel = getModelBaseId(modelId).toLowerCase();
+  if (baseModel.includes("seedance-2.0")) return "720";
+  return resolution === "1080p" ? "1080" : "720";
+}
+
+function normalizeNewApiVideoDuration(duration: number) {
+  const rounded = Math.round(duration);
+  if (!Number.isFinite(rounded)) return 5;
+  return Math.max(3, Math.min(15, rounded));
+}
+
+function withImageReferenceMentions(prompt: string, imageCount: number) {
+  if (imageCount <= 0 || /@image\d+/i.test(prompt)) return prompt;
+  const refs = Array.from({ length: imageCount }, (_, index) => `@image${index + 1}`).join("、");
+  return `${prompt}\n\n参考图片：${refs}`;
+}
+
+function buildMaomiNewApiImageModelId(modelId: string, ratio?: string, resolution?: string, size?: string) {
+  const baseModel = getModelBaseId(modelId);
+  const outputRatio = ratio && ratio !== "auto" ? ratio : "1:1";
+  return `${baseModel}+${outputRatio}+${normalizeNewApiImageResolution(resolution, size)}`;
+}
+
+function buildMaomiNewApiVideoModelId(modelId: string, ratio: string, resolution: string | undefined, duration: number) {
+  return `${getModelBaseId(modelId)}+${ratio}+${normalizeNewApiVideoResolution(modelId, resolution)}+${normalizeNewApiVideoDuration(duration)}`;
+}
+
+function buildMaomiNewApiInputImages(referenceImages: string[]) {
+  return referenceImages.map((image) => /^data:image\//i.test(image) ? { data_url: image } : image);
+}
+
+function buildMaomiNewApiChatImagePayload(modelId: string, prompt: string, referenceImages: string[], size?: string, ratio?: string, resolution?: string) {
+  const promptWithRefs = withImageReferenceMentions(prompt, referenceImages.length);
+  const payload: Record<string, unknown> = {
+    model: buildMaomiNewApiImageModelId(modelId, ratio, resolution, size),
+    prompt: promptWithRefs,
+  };
+  if (referenceImages.length) {
+    payload.input_images = buildMaomiNewApiInputImages(referenceImages);
+  } else {
+    payload.messages = [
+      {
+        role: "user",
+        content: promptWithRefs,
+      },
+    ];
+  }
+  return payload;
+}
+
 function normalizeReferenceImageUrls(referenceImageUrls?: string[], referenceImageUrl?: string) {
   const urls = referenceImageUrls?.length ? referenceImageUrls : referenceImageUrl ? [referenceImageUrl] : [];
   return urls
@@ -1058,6 +1165,46 @@ async function normalizeReferenceImagesForVideo(referenceImages: string[], clien
   return normalizedImages.filter((value, index, list) => Boolean(value) && list.indexOf(value) === index);
 }
 
+async function uploadReferenceImageForRemoteProvider(imageUrl: string, clientTaskId?: string) {
+  const resolvedUrl = normalizeImageDataUrlMime(await resolveReferenceImageDataUrl(imageUrl));
+  if (/^https?:\/\//i.test(resolvedUrl)) return resolvedUrl;
+  if (resolvedUrl.startsWith("/uploads/")) return absolutizeBackendUrl(resolvedUrl);
+  if (!/^data:image\//i.test(resolvedUrl)) return resolvedUrl;
+
+  const blob = await (await fetch(resolvedUrl)).blob();
+  const formData = new FormData();
+  formData.append("images", blob, `video-reference-${Date.now()}.png`);
+  const response = await fetch(makeBackendUrl("/api/uploads/images"), {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    const text = await response.text().catch(() => "");
+    throw new Error(text || `Reference image upload failed: ${response.status}`);
+  }
+  const data = await response.json() as { files?: Array<{ url?: string }> };
+  const uploadedUrl = data.files?.find((file) => typeof file.url === "string" && file.url)?.url;
+  if (!uploadedUrl) throw new Error("Reference image upload did not return a URL");
+  reportImageJobClientEvent(clientTaskId, "video.reference.uploaded", { uploadedUrl });
+  return absolutizeBackendUrl(uploadedUrl);
+}
+
+async function normalizeReferenceImagesForRemoteVideoProvider(referenceImages: string[], clientTaskId?: string) {
+  const normalizedImages: string[] = [];
+  for (const imageUrl of referenceImages) {
+    try {
+      normalizedImages.push(await uploadReferenceImageForRemoteProvider(imageUrl, clientTaskId));
+    } catch (error) {
+      reportImageJobClientEvent(clientTaskId, "video.reference.upload.failed", {
+        imageUrl,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
+  }
+  return normalizedImages.filter((value, index, list) => Boolean(value) && list.indexOf(value) === index);
+}
+
 async function createBackendImageJob({
   provider,
   endpoint,
@@ -1176,8 +1323,9 @@ async function waitForBackendMediaJob(jobId: string, mediaType: MediaJobType, on
   let optimisticProgress = mediaType === "video" ? 8 : 0;
   if (mediaType === "video") onProgress?.(optimisticProgress);
   let lastRecoveryCheckAt = 0;
+  const maxPolls = mediaType === "video" ? VIDEO_JOB_MAX_POLLS : IMAGE_JOB_MAX_POLLS;
 
-  for (let index = 0; index < IMAGE_JOB_MAX_POLLS; index += 1) {
+  for (let index = 0; index < maxPolls; index += 1) {
     const job = await getBackendImageJob(jobId);
     if (job?.status === "completed" && job.resultUrl) {
       onProgress?.(100);
@@ -1324,14 +1472,18 @@ requestPrompt = buildStyleReferenceInstruction({
   const isGptImage = isGptImageModel(model);
   const isNanoBanana = isNanoBananaImageModel(model);
   const isQiyuanImage = isQiyuanImageProvider(provider);
+  const isMaomiNewApiImage = isMaomiNewApiProvider(provider) || isMaomiNewApiImageModel(model);
   const isGeekAIGrokImage = isGeekAIProvider(provider) && isGrokImageModel(model);
-  const imagePayload = isGeekAIGrokImage
+  const isYunwuGrokImage = isYunwuProvider(provider) && isGrokImageModel(model);
+  const imagePayload = isGeekAIGrokImage || isYunwuGrokImage
     ? buildGrokImagePayload(model.id, requestPrompt, n, size, ratio, resolution, provider.useReferenceImagesParam === true ? normalizedReferenceImages : undefined)
     : isQiyuanImage
     ? buildQiyuanImagePayload(model.id, requestPrompt, n, size, ratio, provider.useReferenceImagesParam === true ? normalizedReferenceImages : undefined)
     : buildOpenAIImagePayload(model.id, requestPrompt, n, size, ratio, provider.useReferenceImagesParam === true ? normalizedReferenceImages : undefined);
   const responsesImagePayload = buildOpenAIResponsesImagePayload(model.id, requestPrompt, normalizedReferenceImages, size);
-  const chatImagePayload = isQiyuanImage
+  const chatImagePayload = isMaomiNewApiImage
+    ? buildMaomiNewApiChatImagePayload(model.id, requestPrompt, normalizedReferenceImages, size, ratio, resolution)
+    : isQiyuanImage
     ? buildQiyuanChatImagePayload(model.id, requestPrompt, normalizedReferenceImages, size, ratio)
     : buildOpenAIChatImagePayload(model.id, requestPrompt, normalizedReferenceImages, n, size, ratio);
   const useImageEdit = normalizedReferenceImages.length > 0;
@@ -1353,7 +1505,7 @@ requestPrompt = buildStyleReferenceInstruction({
     useImageEdit: actualUseImageEdit,
   };
   const chatAttempt = {
-    label: isQiyuanImage ? "mingyu chat completions image" : "openai chat completions image",
+    label: isMaomiNewApiImage ? "maomi newapi chat completions image" : isQiyuanImage ? "mingyu chat completions image" : "openai chat completions image",
     endpoint: "/chat/completions",
     payload: chatImagePayload,
     referenceImages: undefined,
@@ -1388,7 +1540,7 @@ requestPrompt = buildStyleReferenceInstruction({
   const backendAttemptsFromRoutes = routeAttempts.length ? routeAttempts : [imageAttempt];
   const firstBackendAttempt = backendAttemptsFromRoutes[0] ?? imageAttempt;
 
-  if (isGptImage || isNanoBanana || isGeekAIGrokImage || actualUseImageEdit || (normalizedReferenceImages.length > 0 && supportsReferenceImagesInGenerations)) {
+  if (isGptImage || isNanoBanana || isGeekAIGrokImage || isYunwuGrokImage || actualUseImageEdit || (normalizedReferenceImages.length > 0 && supportsReferenceImagesInGenerations)) {
     try {
       const job = await createBackendImageJob({
         provider,
@@ -1476,7 +1628,10 @@ export async function generateImageAsset({
       n,
       clientTaskId,
     });
-    reportImageJobClientEvent(clientTaskId, "generate.completed", { resultCount: results.length });
+    reportImageJobClientEvent(clientTaskId, "generate.completed", {
+      resultCount: results.length,
+      resultUrls: results.map((url) => (/^data:image\//i.test(url) ? `<data-image length=${url.length}>` : url)),
+    });
     return results[0] ?? "";
   } catch (error) {
     reportImageJobClientEvent(clientTaskId, "generate.failed", {
@@ -1617,19 +1772,31 @@ export async function generateVideoAsset({
   const resolved = resolveProviderModel(modelId, "video");
   const provider = withSelectedProviderKey(resolved.provider);
   const { model } = resolved;
-  const isSora = isSoraModel(model);
+  const isZexiSeedance = isZexiProvider(provider) && isZexiSeedanceModel(model);
+  const isMaomiNewApiVideo = isMaomiNewApiProvider(provider) || isMaomiNewApiVideoModel(model);
+  const isSora = isSoraModel(model) && !isZexiSeedance;
   const isVeo = isVeoModel(model);
   const isVeoRef = isVeoReferenceModel(model);
   const isGrokVideo = isGrokVideoModel(model);
   const isGeekAIGrokVideo = isGeekAIProvider(provider) && isGrokVideo;
-  const maxReferenceImages = isSora || isGrokVideo ? 1 : isVeoRef ? 3 : isVeo ? 2 : 2;
+  const maxReferenceImages = isZexiSeedance ? getZexiSeedanceMaxReferenceImages(model) : isMaomiNewApiVideo ? 4 : isSora || isGrokVideo ? 1 : isVeoRef ? 3 : isVeo ? 2 : 2;
   const rawInputReferenceImages = normalizeReferenceImageUrls(referenceImageUrls, startImageUrl)
     .concat(endImageUrl ? [endImageUrl] : [])
     .filter((value, index, list) => Boolean(value) && list.indexOf(value) === index)
     .slice(0, maxReferenceImages);
-  const inputReferenceImages = await normalizeReferenceImagesForVideo(rawInputReferenceImages, clientTaskId);
+  const inputReferenceImages = isZexiSeedance || isMaomiNewApiVideo
+    ? await normalizeReferenceImagesForRemoteVideoProvider(rawInputReferenceImages, clientTaskId)
+    : await normalizeReferenceImagesForVideo(rawInputReferenceImages, clientTaskId);
   const videoSize = isSora ? getSoraVideoSizeFromRatio(ratio) : isVeo ? getVeoVideoSizeFromRatio(ratio, resolution) : getVideoSizeFromRatio(ratio);
-  const normalizedDuration = isSora ? normalizeSoraDuration(duration) : isGrokVideo ? normalizeGrokVideoDuration(duration, provider) : duration;
+  const normalizedDuration = isMaomiNewApiVideo
+    ? normalizeNewApiVideoDuration(duration)
+    : isZexiSeedance
+    ? normalizeZexiSeedanceDuration(duration)
+    : isSora
+      ? normalizeSoraDuration(duration)
+      : isGrokVideo
+        ? normalizeGrokVideoDuration(duration, provider)
+        : duration;
   const chatPrompt = isSora
     ? buildSoraPrompt(prompt, ratio, normalizedDuration)
     : isGeekAIGrokVideo
@@ -1654,26 +1821,51 @@ export async function generateVideoAsset({
     image: singleReferenceImage,
     images: imageList,
   };
-  const normalizedVideoPayload = isSora ? normalizeSingleImageVideoPayload(videoPayload) : videoPayload;
-  const chatPayload = {
+  const zexiSeedancePayload = {
     model: model.id,
-    messages: [
+    prompt,
+    seconds: String(normalizedDuration),
+    duration: String(normalizedDuration),
+    aspect_ratio: ratio,
+    ratio,
+    resolution: "720p",
+    image_url: inputReferenceImages.length === 1 ? inputReferenceImages[0] : undefined,
+    reference_image_urls: inputReferenceImages.length > 1 ? inputReferenceImages.slice(0, maxReferenceImages) : undefined,
+  };
+  const maomiNewApiPrompt = withImageReferenceMentions(prompt, inputReferenceImages.length);
+  const maomiNewApiVideoPayload = {
+    model: buildMaomiNewApiVideoModelId(model.id, ratio, resolution, normalizedDuration),
+    prompt: maomiNewApiPrompt,
+    input_images: inputReferenceImages.length ? inputReferenceImages : undefined,
+    messages: inputReferenceImages.length ? undefined : [
       {
         role: "user",
-        content: chatMessageContent,
+        content: maomiNewApiPrompt,
       },
     ],
-    ...(!isGeekAIGrokVideo
-      ? {
-          prompt: chatPrompt,
-          size: videoSize,
-          aspect_ratio: ratio,
-          resolution: isVeo ? normalizeVeoResolution(resolution) : undefined,
-          duration: normalizedDuration,
-          seconds: isSora ? String(normalizedDuration) : undefined,
-        }
-      : {}),
   };
+  const normalizedVideoPayload = isMaomiNewApiVideo ? maomiNewApiVideoPayload : isZexiSeedance ? zexiSeedancePayload : isSora ? normalizeSingleImageVideoPayload(videoPayload) : videoPayload;
+  const chatPayload = isMaomiNewApiVideo
+    ? maomiNewApiVideoPayload
+    : {
+        model: model.id,
+        messages: [
+          {
+            role: "user",
+            content: chatMessageContent,
+          },
+        ],
+        ...(!isGeekAIGrokVideo
+          ? {
+              prompt: chatPrompt,
+              size: videoSize,
+              aspect_ratio: ratio,
+              resolution: isVeo ? normalizeVeoResolution(resolution) : undefined,
+              duration: normalizedDuration,
+              seconds: isSora ? String(normalizedDuration) : undefined,
+            }
+          : {}),
+      };
   const videoRouteEndpoints = getModelApiEndpoints(provider, model, "video");
   const isYunwuGrokVideo = isYunwuProvider(provider) && isGrokVideo;
   const yunwuGrokVideoPayload = {
@@ -1684,7 +1876,7 @@ export async function generateVideoAsset({
   const videoBackendAttempts = videoRouteEndpoints.flatMap((endpoint) => {
     if (endpoint === "/chat/completions") {
       return [{
-        label: isGeekAIProvider(provider) ? "geekai chat completions video" : "chat completions video",
+        label: isMaomiNewApiVideo ? "maomi newapi chat completions video" : isGeekAIProvider(provider) ? "geekai chat completions video" : "chat completions video",
         endpoint: "/chat/completions",
         payload: chatPayload,
         mediaType: "video" as const,
@@ -1732,9 +1924,15 @@ export async function generateVideoAsset({
     }
     return [];
   });
+  const orderedVideoBackendAttempts = isQiyuanImageProvider(provider) && (isSora || isVeo)
+    ? [...videoBackendAttempts].sort((a, b) => {
+        const priority = (endpoint: string) => endpoint === "/async/generations" ? 0 : endpoint === "/videos" ? 1 : endpoint === "/video/create" ? 2 : 3;
+        return priority(a.endpoint) - priority(b.endpoint);
+      })
+    : videoBackendAttempts;
 
-  if (videoBackendAttempts.length) {
-    const firstAttempt = videoBackendAttempts[0];
+  if (orderedVideoBackendAttempts.length) {
+    const firstAttempt = orderedVideoBackendAttempts[0];
 
     onProgress?.(5);
     const job = await createBackendImageJob({
@@ -1743,7 +1941,7 @@ export async function generateVideoAsset({
       payload: firstAttempt.payload,
       clientTaskId,
       mediaType: "video",
-      attempts: videoBackendAttempts,
+      attempts: orderedVideoBackendAttempts,
     });
     return job.status === "completed" && job.resultUrl
       ? absolutizeBackendUrl(job.resultUrl)

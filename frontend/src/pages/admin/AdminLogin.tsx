@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { Shield } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
+import { adminPath } from "../../lib/adminRoutes";
 import { useAdminAuthStore } from "../../store/adminAuthStore";
 
 export default function AdminLogin() {
@@ -13,7 +14,7 @@ export default function AdminLogin() {
   const [message, setMessage] = useState("");
 
   if (!hasHydrated) return null;
-  if (loggedIn) return <Navigate to="/admin/users" replace />;
+  if (loggedIn) return <Navigate to={adminPath("users")} replace />;
 
   const submit = () => {
     const result = login(username, password);
@@ -21,7 +22,7 @@ export default function AdminLogin() {
       setMessage(result.message);
       return;
     }
-    navigate("/admin/users", { replace: true });
+    navigate(adminPath("users"), { replace: true });
   };
 
   return (

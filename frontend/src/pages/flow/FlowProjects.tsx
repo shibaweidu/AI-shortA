@@ -46,7 +46,7 @@ export default function FlowProjects() {
   const navigate = useNavigate();
   const { projects, items, addProject, addItem, updateItem, removeProject, updateProject, hasHydrated } = useFlowStore();
   const { spendCredits, refundCredits } = useCreditStore();
-  const { currentUserId } = useAuthStore();
+  const { currentUserId, hasHydrated: authHydrated } = useAuthStore();
   const { rules: modelCreditRules } = useModelCreditStore();
   const { providers, routing } = useSettingsStore();
   const { providers: userProviders, routing: userRouting } = useUserModelStore();
@@ -59,7 +59,7 @@ export default function FlowProjects() {
   const [type, setType] = useState<FlowItemType>("image");
   const [aspectRatio, setAspectRatio] = useState("16:9");
   const [resolution, setResolution] = useState("2k");
-  const [duration, setDuration] = useState("5s");
+  const [duration, setDuration] = useState("10s");
   const [generationCount, setGenerationCount] = useState(1);
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
   const [referenceImageRoles, setReferenceImageRoles] = useState<Record<string, FlowReferenceRole>>({});
@@ -106,9 +106,12 @@ export default function FlowProjects() {
   const estimatedCredits = estimatedCreditsPerItem !== undefined ? estimatedCreditsPerItem * generationCount : undefined;
   const canGenerate = (!!prompt.trim() || referenceImages.length > 0) && !!model;
 
+  const visibleProjects = currentUserId ? projects : [];
+  const visibleItems = currentUserId ? items : [];
+
   const projectCards = useMemo(() => {
-    return projects.map((project) => {
-      const projectItems = items.filter((item) => item.projectId === project.id);
+    return visibleProjects.map((project) => {
+      const projectItems = visibleItems.filter((item) => item.projectId === project.id);
       const totalImages = projectItems.filter((item) => item.type === "image").length;
       const totalVideos = projectItems.filter((item) => item.type === "video").length;
       const latestCover = [...projectItems]
@@ -123,7 +126,7 @@ export default function FlowProjects() {
         latestCover,
       };
     });
-  }, [items, projects]);
+  }, [visibleItems, visibleProjects]);
 
   useEffect(() => {
     const preferredModel = getPreferredModelValue(currentModelOptions);
@@ -139,7 +142,7 @@ export default function FlowProjects() {
   useEffect(() => {
     if (type !== "video") return;
     if (durationOptions.some((option) => option.value === duration)) return;
-    setDuration(durationOptions[0]?.value ?? "5s");
+    setDuration(durationOptions.find((option) => option.value === "10s")?.value ?? durationOptions[0]?.value ?? "10s");
   }, [duration, durationOptions, type]);
 
   useEffect(() => {
@@ -183,7 +186,11 @@ export default function FlowProjects() {
   };
 
   const handleCreateProject = () => {
-    const id = addProject({ name: draftName || `项目 ${projects.length + 1}` });
+    if (!currentUserId) {
+      navigate("/auth");
+      return;
+    }
+    const id = addProject({ name: draftName || `项目 ${visibleProjects.length + 1}` });
     setDraftName("");
     setShowCreate(false);
     navigate(`/projects/${id}`);
@@ -322,7 +329,7 @@ export default function FlowProjects() {
     await Promise.allSettled(tasks);
   };
 
-  if (!hasHydrated) return null;
+  if (!authHydrated || !hasHydrated) return null;
 
   return (
     <div className="relative -m-3 flex h-[calc(100%+88px)] flex-col overflow-hidden bg-[#08090d] text-white md:-m-8 md:h-[calc(100%+4rem)]">

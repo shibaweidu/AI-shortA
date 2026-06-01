@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist, type PersistOptions, type StateStorage } from "zustand/middleware";
-import { createLocalStorageStateStorage } from "../lib/sharedStateStorage";
+import { broadcastSharedStateUpdate, createLocalStorageStateStorage } from "../lib/sharedStateStorage";
 
 export interface AppUser {
   id: string;
@@ -38,11 +38,10 @@ interface AuthInput {
 }
 
 type AuthResult = { ok: true; userId: string } | { ok: false; message: string };
-type PersistedAuthState = Pick<AuthState, "users" | "currentUserId">;
+type PersistedAuthState = Pick<AuthState, "users"> & { currentUserId?: string };
 const AUTH_STORAGE_KEY = "koala-auth-store-v1";
 const AUTH_LOCAL_SESSION_KEY = "koala-auth-local-session-v1";
-const SHARED_STATE_EVENT_KEY = "koala-shared-state-updated";
-const SHARED_STATE_CHANNEL = "koala-shared-state";
+const AUTH_LOGOUT_MARKER_KEY = "koala-auth-logged-out-v1";
 const BACKEND_API = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "http://127.0.0.1:8787";
 function createId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
@@ -100,8 +99,13 @@ async function writeBackendAuthState(users: StoredUser[]) {
   });
 }
 
+function createPersistedUsersValue(users: StoredUser[], version = 0) {
+  return JSON.stringify({ state: { users }, version });
+}
+
 function readLocalCurrentUserId() {
   try {
+    if (localStorage.getItem(AUTH_LOGOUT_MARKER_KEY)) return undefined;
     const raw = localStorage.getItem(AUTH_LOCAL_SESSION_KEY);
     if (!raw) return undefined;
     const parsed = JSON.parse(raw) as { currentUserId?: unknown };
@@ -116,24 +120,25 @@ function writeLocalCurrentUserId(currentUserId?: string) {
     localStorage.removeItem(AUTH_LOCAL_SESSION_KEY);
     return;
   }
+  localStorage.removeItem(AUTH_LOGOUT_MARKER_KEY);
   localStorage.setItem(AUTH_LOCAL_SESSION_KEY, JSON.stringify({ currentUserId }));
 }
 
-function broadcastAuthUsersUpdate() {
-  const message = { key: AUTH_STORAGE_KEY, updatedAt: Date.now() };
-  try {
-    localStorage.setItem(SHARED_STATE_EVENT_KEY, JSON.stringify(message));
-  } catch {
-    // Backend state remains the source of truth for shared user data.
-  }
+function markLoggedOut() {
+  writeLocalCurrentUserId(undefined);
+  localStorage.setItem(AUTH_LOGOUT_MARKER_KEY, JSON.stringify({ loggedOutAt: Date.now() }));
+}
 
-  try {
-    const channel = new BroadcastChannel(SHARED_STATE_CHANNEL);
-    channel.postMessage(message);
-    channel.close();
-  } catch {
-    // BroadcastChannel is optional.
-  }
+async function clearPersistedCurrentUserId(fallback: StateStorage, name = AUTH_STORAGE_KEY) {
+  markLoggedOut();
+  const fallbackValue = await fallback.getItem(name);
+  const fallbackState = parsePersistedAuthState(fallbackValue);
+  if (!fallbackState?.state) return;
+  await fallback.setItem(name, createPersistedUsersValue(fallbackState.state.users ?? [], fallbackState.version ?? 0));
+}
+
+function broadcastAuthUsersUpdate() {
+  broadcastSharedStateUpdate(AUTH_STORAGE_KEY);
 }
 
 function createAuthStateStorage(fallback: StateStorage): StateStorage<Promise<void>> {
@@ -146,14 +151,15 @@ function createAuthStateStorage(fallback: StateStorage): StateStorage<Promise<vo
       const localCurrentUserId = readLocalCurrentUserId();
       const currentUserId = users.some((user) => user.id === localCurrentUserId) ? localCurrentUserId : undefined;
       const merged = JSON.stringify({ state: { users, currentUserId }, version: backendState?.version ?? fallbackState?.version ?? 0 });
-      await fallback.setItem(name, merged);
+      await fallback.setItem(name, createPersistedUsersValue(users, backendState?.version ?? fallbackState?.version ?? 0));
       return merged;
     },
     setItem: async (name, value) => {
-      await fallback.setItem(name, value);
       const parsed = parsePersistedAuthState(value);
       const users = parsed?.state?.users ?? [];
-      writeLocalCurrentUserId(parsed?.state?.currentUserId);
+      const currentUserId = parsed?.state?.currentUserId;
+      await fallback.setItem(name, createPersistedUsersValue(users, parsed?.version ?? 0));
+      writeLocalCurrentUserId(users.some((user) => user.id === currentUserId) ? currentUserId : undefined);
       try {
         await writeBackendAuthState(users);
         broadcastAuthUsersUpdate();
@@ -162,8 +168,7 @@ function createAuthStateStorage(fallback: StateStorage): StateStorage<Promise<vo
       }
     },
     removeItem: async (name) => {
-      await fallback.removeItem(name);
-      writeLocalCurrentUserId(undefined);
+      await clearPersistedCurrentUserId(fallback, name);
       try {
         await writeBackendAuthState([]);
         broadcastAuthUsersUpdate();
@@ -226,7 +231,11 @@ export const useAuthStore = create<AuthState>()(
         });
         return result;
       },
-      logout: () => set({ currentUserId: undefined }),
+      logout: () => {
+        markLoggedOut();
+        void clearPersistedCurrentUserId(createLocalStorageStateStorage());
+        set({ currentUserId: undefined });
+      },
       updateUserStatus: (id, status) => {
         set((state) => ({
           currentUserId: state.currentUserId === id && status === "disabled" ? undefined : state.currentUserId,

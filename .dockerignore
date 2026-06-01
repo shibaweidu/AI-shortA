@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/.vite
+**/.cache
+.git
+.gitignore
+docker-compose.yml
+Dockerfile
+README.md
+npm-debug.log*

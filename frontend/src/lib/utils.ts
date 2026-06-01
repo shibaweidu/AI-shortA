@@ -28,10 +28,20 @@ function isBackendUploadUrl(url: string) {
   }
 }
 
+function isPublicObjectStorageUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" && /\.s3\.bitiful\.net$/i.test(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export function getDisplayAssetUrl(url?: string) {
   if (!url) return url;
   if (url.startsWith("/uploads/")) return `${BACKEND_API}${url}`;
   if (isBackendUploadUrl(url)) return url;
+  if (isPublicObjectStorageUrl(url)) return url;
   if (!/^https?:\/\//i.test(url)) return url;
   return `/api-proxy/asset?url=${encodeURIComponent(url)}`;
 }

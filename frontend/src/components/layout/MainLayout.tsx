@@ -14,11 +14,11 @@ function BrandMark() {
 }
 
 export function MainLayout() {
- const { users, currentUserId } = useAuthStore();
-  const currentUser = users.find((user) => user.id === currentUserId);
+  const { users, currentUserId, hasHydrated } = useAuthStore();
+  const currentUser = hasHydrated ? users.find((user) => user.id === currentUserId) : undefined;
   const mobileNav = [
     ...primaryNav,
-    currentUser
+    hasHydrated && currentUser
       ? { to: "/profile", label: "个人", icon: UserCircle, end: false }
       : { to: "/auth", label: "登录", icon: Wallet, end: false },
     { to: "/settings", label: "设置", icon: Settings, end: false },
@@ -55,7 +55,7 @@ export function MainLayout() {
 
         <div className="mt-auto pt-4">
           <div className="border-t border-white/[0.06] pt-4">
-            {currentUser ? (
+            {hasHydrated && currentUser ? (
               <NavLink
                 to="/profile"
                 className={({ isActive }) =>

@@ -1,0 +1,37 @@
+services:
+  ai-shorta:
+    build: .
+    container_name: ai-shorta
+    restart: unless-stopped
+    environment:
+      PORT: "8787"
+      VITE_BACKEND_URL: "https://ai.appkaola.com"
+    ports:
+      - "127.0.0.1:5173:5173"
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - backend-data:/app/backend/data
+      - backend-uploads:/app/backend/uploads
+      - backend-logs:/app/backend/logs
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: ai-shorta-caddy
+    restart: unless-stopped
+    depends_on:
+      - ai-shorta
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  backend-data:
+  backend-uploads:
+  backend-logs:
+  caddy-data:
+  caddy-config:

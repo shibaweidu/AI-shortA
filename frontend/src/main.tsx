@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { Navigate, createBrowserRouter, RouterProvider } from "react-router-dom";
 import { MainLayout } from "./components/layout/MainLayout";
+import { RequireAuth } from "./components/RequireAuth";
 import { SharedStoreSync } from "./components/SharedStoreSync";
 import LandingHome from "./pages/home/LandingHome";
 import Auth from "./pages/auth/Auth";
@@ -25,8 +26,11 @@ import AdminRedeemCodes from "./pages/admin/AdminRedeemCodes";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminAgents from "./pages/admin/AdminAgents";
 import AdminEmailSettings from "./pages/admin/AdminEmailSettings";
+import AdminLogs from "./pages/admin/AdminLogs";
+import AdminStorage from "./pages/admin/AdminStorage";
 import AgentCreate from "./pages/agent/AgentCreate";
 import DiscoverWorkDetail from "./pages/discover/DiscoverWorkDetail";
+import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH, adminPath } from "./lib/adminRoutes";
 import "./index.css";
 
 const router = createBrowserRouter([
@@ -40,7 +44,7 @@ const router = createBrowserRouter([
       },
       {
         path: "projects",
-        element: <FlowProjects />,
+        element: <RequireAuth><FlowProjects /></RequireAuth>,
       },
       {
         path: "flow",
@@ -48,11 +52,11 @@ const router = createBrowserRouter([
       },
       {
         path: "projects/:projectId",
-        element: <Flow />,
+        element: <RequireAuth><Flow /></RequireAuth>,
       },
       {
         path: "projects/:projectId/works/:itemId",
-        element: <FlowWorkspace />,
+        element: <RequireAuth><FlowWorkspace /></RequireAuth>,
       },
       {
         path: "works/:itemId",
@@ -60,15 +64,15 @@ const router = createBrowserRouter([
       },
       {
         path: "settings",
-        element: <Settings />,
+        element: <RequireAuth><Settings /></RequireAuth>,
       },
       {
         path: "agents",
-        element: <AgentCreate />,
+        element: <RequireAuth><AgentCreate /></RequireAuth>,
       },
       {
         path: "agents/create",
-        element: <AgentCreate />,
+        element: <RequireAuth><AgentCreate /></RequireAuth>,
       },
       {
         path: "auth",
@@ -76,11 +80,11 @@ const router = createBrowserRouter([
       },
       {
         path: "profile",
-        element: <Profile />,
+        element: <RequireAuth><Profile /></RequireAuth>,
       },
       {
         path: "credits",
-        element: <Credits />,
+        element: <RequireAuth><Credits /></RequireAuth>,
       },
       {
         path: "*",
@@ -89,16 +93,28 @@ const router = createBrowserRouter([
     ],
   },
   {
-    path: "/admin-login",
+    path: ADMIN_LOGIN_PATH,
     element: <AdminLogin />,
   },
   {
+    path: "/admin-login",
+    element: <Navigate to="/" replace />,
+  },
+  {
     path: "/admin",
+    element: <Navigate to="/" replace />,
+  },
+  {
+    path: "/admin/*",
+    element: <Navigate to="/" replace />,
+  },
+  {
+    path: ADMIN_BASE_PATH,
     element: <AdminLayout />,
     children: [
       {
         index: true,
-        element: <Navigate to="/admin/home-content" replace />,
+        element: <Navigate to={adminPath("home-content")} replace />,
       },
       {
         path: "users",
@@ -143,6 +159,14 @@ const router = createBrowserRouter([
       {
         path: "email",
         element: <AdminEmailSettings />,
+      },
+      {
+        path: "storage",
+        element: <AdminStorage />,
+      },
+      {
+        path: "logs",
+        element: <AdminLogs />,
       },
       {
         path: "settings",
