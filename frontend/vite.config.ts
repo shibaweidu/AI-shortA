@@ -255,5 +255,15 @@ export default defineConfig({
     allowedHosts: ["ai.appkaola.com"],
     port: 5173,
     strictPort: true,
+    proxy: {
+      "/api": {
+        target: process.env.VITE_BACKEND_URL || "http://127.0.0.1:8787",
+        changeOrigin: true,
+      },
+      "/uploads": {
+        target: process.env.VITE_BACKEND_URL || "http://127.0.0.1:8787",
+        changeOrigin: true,
+      },
+    },
   },
 })

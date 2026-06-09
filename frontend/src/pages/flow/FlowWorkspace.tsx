@@ -67,6 +67,7 @@ export default function FlowWorkspace() {
   const [resolution, setResolution] = useState("2k");
   const [generationCount, setGenerationCount] = useState(1);
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [externalReferenceImages, setExternalReferenceImages] = useState<string[]>([]);
   const [referenceImageRoles, setReferenceImageRoles] = useState<Record<string, FlowReferenceRole>>({});
   const [openGeneratorPanel, setOpenGeneratorPanel] = useState<"type" | "model" | "ratio" | "count" | "assets" | "styles" | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<SelectedStyleReference | null>(null);
@@ -188,6 +189,7 @@ export default function FlowWorkspace() {
       setResolution(currentItem.parameters.resolution || "2k");
       const nextReferences = currentImageReference.length ? currentImageReference : inheritedReferences;
       setReferenceImages(nextReferences);
+      setExternalReferenceImages(nextReferences);
       setReferenceImageRoles(() => {
         if (currentImageReference.length) return {};
         const nextRoles: Record<string, FlowReferenceRole> = {};
@@ -284,6 +286,7 @@ export default function FlowWorkspace() {
     setResolution(currentItem.parameters.resolution || "2k");
     const nextReferences = currentImageReference.length ? currentImageReference : inheritedReferences;
     setReferenceImages(nextReferences);
+    setExternalReferenceImages(nextReferences);
     setReferenceImageRoles(() => {
       if (currentImageReference.length) return {};
       const nextRoles: Record<string, FlowReferenceRole> = {};
@@ -679,6 +682,8 @@ export default function FlowWorkspace() {
                 onGenerationCountChange={setGenerationCount}
                 referenceImages={referenceImages}
                 onReferenceImagesChange={setReferenceImages}
+                externalReferenceImages={externalReferenceImages}
+                onExternalReferenceImagesChange={setExternalReferenceImages}
                 referenceImageRoles={referenceImageRoles}
                 onReferenceImageRolesChange={setReferenceImageRoles}
                 selectedStyle={selectedStyle}

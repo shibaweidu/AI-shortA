@@ -30,7 +30,11 @@ echo.
 echo Opening backend window...
 start "Koala AI Backend 8787" cmd /k call "%BACKEND_SCRIPT%"
 
-timeout /t 2 /nobreak >nul
+echo Waiting for backend health...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$deadline = (Get-Date).AddSeconds(45); do { try { $r = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8787/api/health' -TimeoutSec 2; if ($r.StatusCode -eq 200) { exit 0 } } catch {}; Start-Sleep -Seconds 1 } while ((Get-Date) -lt $deadline); exit 1"
+if errorlevel 1 (
+  echo [WARN] Backend health check did not pass yet. Starting frontend anyway; refresh the browser after backend is ready.
+)
 
 echo Opening frontend window...
 start "Koala AI Frontend 5173" cmd /k call "%FRONTEND_SCRIPT%"

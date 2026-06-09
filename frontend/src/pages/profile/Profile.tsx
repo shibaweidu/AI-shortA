@@ -42,8 +42,8 @@ export default function Profile() {
     setMessage(result.ok ? { type: "success", text: "用户名已保存。" } : { type: "error", text: result.message });
   };
 
-  const handleUpdatePassword = () => {
-    const result = updatePassword(currentUserId, oldPassword, newPassword, confirmPassword);
+  const handleUpdatePassword = async () => {
+    const result = await updatePassword(currentUserId, oldPassword, newPassword, confirmPassword);
     if (!result.ok) {
       setMessage({ type: "error", text: result.message });
       return;
@@ -146,7 +146,7 @@ export default function Profile() {
               <Input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} className="h-11 border-white/[0.08] bg-white/[0.03] text-white" />
               <label className="block text-sm text-[#cfd6e2]">确认新密码</label>
               <Input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} className="h-11 border-white/[0.08] bg-white/[0.03] text-white" />
-              <Button type="button" onClick={handleUpdatePassword} className="h-10 rounded-xl bg-cyan-400 px-5 text-black hover:bg-cyan-300">
+              <Button type="button" onClick={() => void handleUpdatePassword()} className="h-10 rounded-xl bg-cyan-400 px-5 text-black hover:bg-cyan-300">
                 <Save className="mr-2 h-4 w-4" />
                 修改密码
               </Button>

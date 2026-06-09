@@ -18,10 +18,12 @@ lerna-debug.log*
 # Runtime data
 backend/data/
 backend/uploads/
+backups/
 
 # Local environment files
 .env
 .env.*
+!.env.example
 *.local
 
 # Editor and OS files

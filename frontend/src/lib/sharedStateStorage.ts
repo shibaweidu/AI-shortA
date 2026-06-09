@@ -1,6 +1,6 @@
 import type { StateStorage } from "zustand/middleware";
 
-const BACKEND_API = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "http://127.0.0.1:8787";
+const BACKEND_API = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "";
 const SHARED_STATE_EVENT_KEY = "koala-shared-state-updated";
 const SHARED_STATE_CHANNEL = "koala-shared-state";
 const SHARED_STATE_SOURCE_ID = Math.random().toString(36).slice(2);

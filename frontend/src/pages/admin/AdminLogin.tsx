@@ -16,8 +16,8 @@ export default function AdminLogin() {
   if (!hasHydrated) return null;
   if (loggedIn) return <Navigate to={adminPath("users")} replace />;
 
-  const submit = () => {
-    const result = login(username, password);
+  const submit = async () => {
+    const result = await login(username, password);
     if (!result.ok) {
       setMessage(result.message);
       return;
@@ -45,13 +45,13 @@ export default function AdminLogin() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === "Enter") submit();
+              if (event.key === "Enter") void submit();
             }}
             placeholder="管理员密码"
             className="h-12 border-white/[0.08] bg-white/[0.03] text-white placeholder:text-[#667085]"
           />
           {message ? <div className="rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">{message}</div> : null}
-          <Button type="button" onClick={submit} className="h-12 w-full rounded-xl bg-cyan-400 text-black hover:bg-cyan-300">
+          <Button type="button" onClick={() => void submit()} className="h-12 w-full rounded-xl bg-cyan-400 text-black hover:bg-cyan-300">
             登录后台
           </Button>
         </div>

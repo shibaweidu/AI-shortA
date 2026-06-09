@@ -6,6 +6,7 @@ export interface ModelCreditRule {
   modelValue: string;
   imageCreditsByResolution: Record<string, number>;
   videoCreditsByDuration: Record<string, number>;
+  videoCreditsPerSecond?: number;
   updatedAt: number;
 }
 
@@ -15,6 +16,7 @@ interface ModelCreditState {
   setHasHydrated: (value: boolean) => void;
   setImageCredits: (modelValue: string, resolution: string, credits: number) => void;
   setVideoCredits: (modelValue: string, duration: string, credits: number) => void;
+  setVideoCreditsPerSecond: (modelValue: string, credits: number) => void;
   clearRule: (modelValue: string) => void;
 }
 
@@ -23,6 +25,12 @@ type PersistedModelCreditState = Pick<ModelCreditState, "rules">;
 function normalizeCredits(value: number) {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.floor(value));
+}
+
+function parseDurationSeconds(value?: string) {
+  const seconds = Number.parseFloat(value ?? "");
+  if (!Number.isFinite(seconds) || seconds <= 0) return 1;
+  return seconds;
 }
 
 function upsertRule(rules: ModelCreditRule[], modelValue: string, updater: (rule: ModelCreditRule) => ModelCreditRule) {
@@ -68,6 +76,15 @@ export const useModelCreditStore = create<ModelCreditState>()(
           })),
         }));
       },
+      setVideoCreditsPerSecond: (modelValue, credits) => {
+        set((state) => ({
+          rules: upsertRule(state.rules, modelValue, (rule) => ({
+            ...rule,
+            videoCreditsPerSecond: normalizeCredits(credits),
+            updatedAt: Date.now(),
+          })),
+        }));
+      },
       clearRule: (modelValue) => set((state) => ({ rules: state.rules.filter((rule) => rule.modelValue !== modelValue) })),
     }),
     {
@@ -94,9 +111,9 @@ export function getModelCreditCost(input: {
     const credits = rule?.imageCreditsByResolution[input.resolution];
     if (typeof credits === "number") return credits;
   }
-  if (input.type === "video" && input.duration) {
-    const credits = rule?.videoCreditsByDuration[input.duration];
-    if (typeof credits === "number") return credits;
+  if (input.type === "video") {
+    const creditsPerSecond = typeof rule?.videoCreditsPerSecond === "number" ? rule.videoCreditsPerSecond : input.fallbackCredits;
+    return normalizeCredits((creditsPerSecond ?? 0) * parseDurationSeconds(input.duration));
   }
   return typeof input.fallbackCredits === "number" ? input.fallbackCredits : 0;
 }

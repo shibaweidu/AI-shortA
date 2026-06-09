@@ -1,6 +1,6 @@
 import type { Agent, AgentAttachment, AgentChatResponse } from '../types/agent';
 
-const API_BASE = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, '') || 'http://127.0.0.1:8787';
+const API_BASE = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, '') || '';
 
 export type UploadedImageFile = {
   url: string;

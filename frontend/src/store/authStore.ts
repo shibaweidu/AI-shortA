@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist, type PersistOptions, type StateStorage } from "zustand/middleware";
+import { createPasswordHashRecord, verifyPasswordHash, type PasswordHashRecord } from "../lib/passwordHash";
 import { broadcastSharedStateUpdate, createLocalStorageStateStorage } from "../lib/sharedStateStorage";
 
 export interface AppUser {
@@ -12,8 +13,8 @@ export interface AppUser {
   lastLoginAt?: number;
 }
 
-interface StoredUser extends AppUser {
-  password: string;
+interface StoredUser extends AppUser, Partial<PasswordHashRecord> {
+  password?: string;
 }
 
 interface AuthState {
@@ -21,14 +22,14 @@ interface AuthState {
   currentUserId?: string;
   hasHydrated: boolean;
   setHasHydrated: (value: boolean) => void;
-  register: (input: AuthInput) => AuthResult;
-  login: (input: AuthInput) => AuthResult;
+  register: (input: AuthInput) => Promise<AuthResult>;
+  login: (input: AuthInput) => Promise<AuthResult>;
   logout: () => void;
   updateUserStatus: (id: string, status: AppUser["status"]) => void;
   renameUser: (id: string, displayName: string) => void;
   updateDisplayName: (id: string, displayName: string) => { ok: true } | { ok: false; message: string };
   updateUsername: (id: string, username: string) => { ok: true } | { ok: false; message: string };
-  updatePassword: (id: string, currentPassword: string, nextPassword: string, confirmPassword: string) => { ok: true } | { ok: false; message: string };
+  updatePassword: (id: string, currentPassword: string, nextPassword: string, confirmPassword: string) => Promise<{ ok: true } | { ok: false; message: string }>;
 }
 
 interface AuthInput {
@@ -42,7 +43,24 @@ type PersistedAuthState = Pick<AuthState, "users"> & { currentUserId?: string };
 const AUTH_STORAGE_KEY = "koala-auth-store-v1";
 const AUTH_LOCAL_SESSION_KEY = "koala-auth-local-session-v1";
 const AUTH_LOGOUT_MARKER_KEY = "koala-auth-logged-out-v1";
-const BACKEND_API = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "http://127.0.0.1:8787";
+const BACKEND_API = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "";
+
+function stripLegacyPassword(user: StoredUser, hashRecord: PasswordHashRecord): StoredUser {
+  const { password: _password, ...rest } = user;
+  return { ...rest, ...hashRecord };
+}
+
+async function verifyStoredUserPassword(user: StoredUser, password: string) {
+  if (user.passwordHash && user.passwordSalt && typeof user.passwordVersion === "number") {
+    return verifyPasswordHash(password, {
+      passwordHash: user.passwordHash,
+      passwordSalt: user.passwordSalt,
+      passwordVersion: user.passwordVersion,
+    });
+  }
+  return typeof user.password === "string" && user.password === password;
+}
+
 function createId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -186,13 +204,14 @@ export const useAuthStore = create<AuthState>()(
       currentUserId: undefined,
       hasHydrated: false,
       setHasHydrated: (value) => set({ hasHydrated: value }),
-      register: (input) => {
+      register: async (input) => {
         const validation = validateInput(input);
         if (!validation.ok) return validation;
         const displayName = validateDisplayName(input.displayName);
         if (input.displayName?.trim() && !displayName) return { ok: false, message: "用户名不能超过 24 个字符。" };
 
         let result: AuthResult = { ok: false, message: "账号已存在。" };
+        const passwordRecord = await createPasswordHashRecord(validation.password);
         set((state) => {
           if (state.users.some((user) => user.username === validation.username)) return state;
           const now = Date.now();
@@ -200,7 +219,7 @@ export const useAuthStore = create<AuthState>()(
             id: createId("user"),
             username: validation.username,
             displayName: displayName || validation.username,
-            password: validation.password,
+            ...passwordRecord,
             status: "active",
             createdAt: now,
             updatedAt: now,
@@ -211,13 +230,19 @@ export const useAuthStore = create<AuthState>()(
         });
         return result;
       },
-      login: (input) => {
+      login: async (input) => {
         const validation = validateInput(input);
         if (!validation.ok) return validation;
 
+        const storedUser = useAuthStore.getState().users.find((item) => item.username === validation.username);
+        if (!storedUser || !(await verifyStoredUserPassword(storedUser, validation.password))) {
+          return { ok: false, message: "Invalid account or password." };
+        }
+        const migratedRecord = storedUser.password ? await createPasswordHashRecord(validation.password) : null;
+
         let result: AuthResult = { ok: false, message: "账号或密码错误。" };
         set((state) => {
-          const user = state.users.find((item) => item.username === validation.username && item.password === validation.password);
+          const user = state.users.find((item) => item.id === storedUser.id);
           if (!user) return state;
           if (user.status === "disabled") {
             result = { ok: false, message: "账号已被停用，请联系管理员。" };
@@ -226,7 +251,15 @@ export const useAuthStore = create<AuthState>()(
           result = { ok: true, userId: user.id };
           return {
             currentUserId: user.id,
-            users: state.users.map((item) => (item.id === user.id ? { ...item, lastLoginAt: Date.now(), updatedAt: Date.now() } : item)),
+            users: state.users.map((item) =>
+              item.id === user.id
+                ? {
+                    ...(migratedRecord ? stripLegacyPassword(item, migratedRecord) : item),
+                    lastLoginAt: Date.now(),
+                    updatedAt: Date.now(),
+                  }
+                : item
+            ),
           };
         });
         return result;
@@ -276,17 +309,22 @@ export const useAuthStore = create<AuthState>()(
         });
         return result;
       },
-      updatePassword: (id, currentPassword, nextPassword, confirmPassword) => {
+      updatePassword: async (id, currentPassword, nextPassword, confirmPassword) => {
         if (nextPassword.length < 6) return { ok: false, message: "新密码至少需要 6 个字符。" };
         if (nextPassword !== confirmPassword) return { ok: false, message: "两次输入的新密码不一致。" };
 
         let result: { ok: true } | { ok: false; message: string } = { ok: false, message: "旧密码错误。" };
+        const existingUser = useAuthStore.getState().users.find((item) => item.id === id);
+        if (!existingUser || !(await verifyStoredUserPassword(existingUser, currentPassword))) {
+          return { ok: false, message: "Invalid current password." };
+        }
+        const passwordRecord = await createPasswordHashRecord(nextPassword);
         set((state) => {
           const user = state.users.find((item) => item.id === id);
-          if (!user || user.password !== currentPassword) return state;
+          if (!user) return state;
           result = { ok: true };
           return {
-            users: state.users.map((item) => (item.id === id ? { ...item, password: nextPassword, updatedAt: Date.now() } : item)),
+            users: state.users.map((item) => (item.id === id ? stripLegacyPassword({ ...item, updatedAt: Date.now() }, passwordRecord) : item)),
           };
         });
         return result;

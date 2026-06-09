@@ -7,11 +7,22 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createWriteStream } from "node:fs";
 import { appendFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createHash, randomInt } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { setDefaultResultOrder } from "node:dns";
 import { setDefaultAutoSelectFamily } from "node:net";
 import { basename, dirname, extname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import {
+  loadLegacyStateFromPostgres,
+  saveAgentsSnapshotToPostgres,
+  saveAppStateEntryToPostgres,
+  saveConfigDocumentToPostgres,
+  saveImageJobsSnapshotToPostgres,
+  shouldUsePostgresDualWrite,
+} from "./db/legacyPersistence.js";
+import { materializeAppStateToPostgres } from "./db/materializedState.js";
+import { isPostgresEnabled, queryPostgres } from "./db/postgres.js";
 
 const PORT = Number(process.env.PORT ?? 8787);
 const HOST = process.env.HOST ?? "0.0.0.0";
@@ -19,6 +30,8 @@ const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL ?? process.env.VITE_BACKEND
 const DATA_DIR = join(process.cwd(), "data");
 const UPLOADS_DIR = join(process.cwd(), "uploads");
 const LOGS_DIR = join(process.cwd(), "logs");
+const FRONTEND_DIST_DIR = process.env.FRONTEND_DIST_DIR ?? join(process.cwd(), "../frontend/dist");
+const FRONTEND_INDEX_FILE = join(FRONTEND_DIST_DIR, "index.html");
 const JOBS_FILE = join(DATA_DIR, "image-jobs.json");
 const APP_STATE_FILE = join(DATA_DIR, "app-state.json");
 const AGENTS_FILE = join(DATA_DIR, "agents.json");
@@ -27,6 +40,14 @@ const STORAGE_CONFIG_FILE = join(DATA_DIR, "storage-config.json");
 const STYLE_LIBRARY_FILE = join(DATA_DIR, "style-library.json");
 const IMAGE_JOBS_LOG_FILE = join(LOGS_DIR, "image-jobs.log");
 const APP_STATE_LOG_FILE = join(LOGS_DIR, "app-state.log");
+const generationResultCache = new Map<string, { createdAt: number; request?: unknown; response: unknown }>();
+
+function pruneGenerationResultCache() {
+  const cutoff = Date.now() - 1000 * 60 * 60 * 6;
+  for (const [key, value] of generationResultCache.entries()) {
+    if (value.createdAt < cutoff) generationResultCache.delete(key);
+  }
+}
 const ADMIN_LOG_SOURCES = {
   "image-jobs": {
     label: "生成任务日志",
@@ -50,6 +71,9 @@ const UPSTREAM_LOG_ACCESS_TOKEN = (process.env.IMAGE_JOB_LOG_ACCESS_TOKEN ?? pro
 const UPSTREAM_LOG_COOKIE = (process.env.IMAGE_JOB_LOG_COOKIE ?? "").trim();
 const FORCE_IPV4_OUTBOUND = process.env.IMAGE_JOB_FORCE_IPV4 !== "0";
 const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT ?? "200mb";
+const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_SECONDS ?? 60) * 1000;
+const DEFAULT_RATE_LIMIT_MAX_REQUESTS = process.env.NODE_ENV === "production" ? 300 : 0;
+const RATE_LIMIT_MAX_REQUESTS = Number(process.env.RATE_LIMIT_MAX_REQUESTS ?? DEFAULT_RATE_LIMIT_MAX_REQUESTS);
 
 if (FORCE_IPV4_OUTBOUND) {
   setDefaultResultOrder("ipv4first");
@@ -349,8 +373,56 @@ const DEFAULT_REFERENCE_SETTINGS: ReferenceSettings = {
 };
 
 app.use(cors());
+app.set("trust proxy", process.env.TRUST_PROXY ?? "loopback");
+app.use((request, response, next) => {
+  const requestId = typeof request.headers["x-request-id"] === "string" && request.headers["x-request-id"].trim()
+    ? request.headers["x-request-id"].trim().slice(0, 120)
+    : randomUUID();
+  response.setHeader("X-Request-Id", requestId);
+  response.setHeader("X-Content-Type-Options", "nosniff");
+  response.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
+
+const rateLimitBuckets = new Map<string, { resetAt: number; count: number }>();
+app.use((request, response, next) => {
+  if (request.path === "/api/health" || RATE_LIMIT_MAX_REQUESTS <= 0) {
+    next();
+    return;
+  }
+  const now = Date.now();
+  const key = request.ip ?? request.socket.remoteAddress ?? "unknown";
+  const current = rateLimitBuckets.get(key);
+  const bucket = current && current.resetAt > now ? current : { resetAt: now + RATE_LIMIT_WINDOW_MS, count: 0 };
+  bucket.count += 1;
+  rateLimitBuckets.set(key, bucket);
+  response.setHeader("RateLimit-Limit", String(RATE_LIMIT_MAX_REQUESTS));
+  response.setHeader("RateLimit-Remaining", String(Math.max(0, RATE_LIMIT_MAX_REQUESTS - bucket.count)));
+  response.setHeader("RateLimit-Reset", String(Math.ceil(bucket.resetAt / 1000)));
+  if (bucket.count > RATE_LIMIT_MAX_REQUESTS) {
+    response.status(429).json({ error: "Too many requests" });
+    return;
+  }
+  if (rateLimitBuckets.size > 10_000) {
+    for (const [bucketKey, value] of rateLimitBuckets.entries()) {
+      if (value.resetAt <= now) rateLimitBuckets.delete(bucketKey);
+    }
+  }
+  next();
+});
 app.use(express.json({ limit: JSON_BODY_LIMIT }));
 app.use("/uploads", express.static(UPLOADS_DIR, { fallthrough: false, maxAge: "7d" }));
+
+function saveAppStateEntryInBackground(key: string, value: string | null) {
+  if (!shouldUsePostgresDualWrite()) return;
+  void (async () => {
+    await saveAppStateEntryToPostgres(key, value);
+    await materializeAppStateToPostgres(key, value);
+  })().catch((error) => {
+    console.error("[app-state] failed to dual-write PostgreSQL entry", { key, error });
+  });
+}
 
 app.get("/api/storage/object", async (request, response) => {
   const key = typeof request.query.key === "string" ? request.query.key.trim() : "";
@@ -375,7 +447,113 @@ app.get("/api/storage/object", async (request, response) => {
 });
 
 app.get("/api/health", (_request, response) => {
-  response.json({ ok: true, jobs: jobs.size, runningJobs, queueLength: pendingQueue.length });
+  response.json({
+    ok: true,
+    jobs: jobs.size,
+    runningJobs,
+    queueLength: pendingQueue.length,
+    database: {
+      configured: isPostgresEnabled(),
+      dualWrite: shouldUsePostgresDualWrite(),
+      readPrimary: process.env.DB_READ_PRIMARY === "postgres" ? "postgres" : "json",
+    },
+  });
+});
+
+app.get("/api/health/deep", async (_request, response) => {
+  const databaseConfigured = isPostgresEnabled();
+  let databaseOk = !databaseConfigured;
+  let databaseError: string | undefined;
+  if (databaseConfigured) {
+    try {
+      await queryPostgres("select 1");
+      databaseOk = true;
+    } catch (error) {
+      databaseOk = false;
+      databaseError = error instanceof Error ? error.message : String(error);
+    }
+  }
+  response.status(databaseOk ? 200 : 503).json({
+    ok: databaseOk,
+    jobs: jobs.size,
+    runningJobs,
+    queueLength: pendingQueue.length,
+    database: {
+      configured: databaseConfigured,
+      ok: databaseOk,
+      dualWrite: shouldUsePostgresDualWrite(),
+      readPrimary: process.env.DB_READ_PRIMARY === "postgres" ? "postgres" : "json",
+      error: databaseError,
+    },
+  });
+});
+
+app.get("/api-proxy/asset", async (request, response) => {
+  const assetUrl = typeof request.query.url === "string" ? request.query.url.trim() : "";
+  if (!assetUrl || !/^https?:\/\//i.test(assetUrl)) {
+    response.status(400).json({ error: "Invalid asset url" });
+    return;
+  }
+
+  try {
+    const upstreamResponse = await fetch(assetUrl, {
+      method: "GET",
+      headers: { Accept: typeof request.headers.accept === "string" ? request.headers.accept : "*/*" },
+    });
+    response.status(upstreamResponse.status);
+    response.setHeader("Content-Type", upstreamResponse.headers.get("content-type") || "application/octet-stream");
+    response.setHeader("Cache-Control", "no-cache");
+    if (!upstreamResponse.body) {
+      response.end();
+      return;
+    }
+    Readable.fromWeb(upstreamResponse.body as never).pipe(response);
+  } catch (error) {
+    response.status(502).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get("/api-proxy/generation-result/:clientTaskId", (request, response) => {
+  pruneGenerationResultCache();
+  const result = generationResultCache.get(request.params.clientTaskId);
+  response.json(result ? { found: true, ...result } : { found: false });
+});
+
+app.get("/api-proxy/generation-results", (_request, response) => {
+  pruneGenerationResultCache();
+  response.json({
+    results: Array.from(generationResultCache.entries()).map(([clientTaskId, value]) => ({
+      clientTaskId,
+      ...value,
+    })),
+  });
+});
+
+app.get("/api-proxy", async (request, response) => {
+  const targetUrl = typeof request.headers["x-target-url"] === "string" ? request.headers["x-target-url"] : "";
+  if (!targetUrl || !/^https?:\/\//i.test(targetUrl)) {
+    response.status(400).json({ error: "Missing or invalid x-target-url header" });
+    return;
+  }
+
+  const headers: Record<string, string> = {
+    Accept: typeof request.headers.accept === "string" ? request.headers.accept : "*/*",
+  };
+  if (typeof request.headers.authorization === "string") headers.Authorization = request.headers.authorization;
+
+  try {
+    const upstreamResponse = await fetch(targetUrl, { method: "GET", headers });
+    response.status(upstreamResponse.status);
+    response.setHeader("Content-Type", upstreamResponse.headers.get("content-type") || "application/octet-stream");
+    response.setHeader("Cache-Control", "no-cache");
+    if (!upstreamResponse.body) {
+      response.end();
+      return;
+    }
+    Readable.fromWeb(upstreamResponse.body as never).pipe(response);
+  } catch (error) {
+    response.status(502).json({ error: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 app.post("/api/client-log", (request, response) => {
@@ -409,28 +587,49 @@ app.put("/api/app-state/:key", (request, response) => {
     return;
   }
 
+  const currentStoredValue = appState.get(request.params.key);
+  const currentValue = currentStoredValue ?? null;
   if (value === null) {
+    if (currentValue === null) {
+      response.json({ ok: true, skipped: true });
+      return;
+    }
     appState.delete(request.params.key);
     logAppState("delete", request.params.key, null);
+    saveAppStateEntryInBackground(request.params.key, null);
   } else {
+    if (currentValue === value) {
+      response.json({ ok: true, skipped: true });
+      return;
+    }
     if (shouldSkipEmptyFlowStateOverwrite(request.params.key, value)) {
       logAppState("skip-empty-flow-overwrite", request.params.key, value);
       response.json({ ok: true, skipped: true });
       return;
     }
     const nextFlowState = request.params.key.startsWith("ai-director-flow-v2:")
-      ? mergeFlowStateValue(appState.get(request.params.key), value)
+      ? mergeFlowStateValue(currentStoredValue, value)
       : { value, merged: false };
+    if (nextFlowState.value === currentValue) {
+      response.json({ ok: true, skipped: true });
+      return;
+    }
     appState.set(request.params.key, nextFlowState.value);
     logAppState(nextFlowState.merged ? "put-merged-flow" : "put", request.params.key, nextFlowState.value);
+    saveAppStateEntryInBackground(request.params.key, nextFlowState.value);
   }
   void saveAppStateSoon();
   response.json({ ok: true });
 });
 
 app.delete("/api/app-state/:key", (request, response) => {
+  if (!appState.has(request.params.key)) {
+    response.json({ ok: true, skipped: true });
+    return;
+  }
   appState.delete(request.params.key);
   logAppState("delete", request.params.key, null);
+  saveAppStateEntryInBackground(request.params.key, null);
   void saveAppStateSoon();
   response.json({ ok: true });
 });
@@ -898,7 +1097,7 @@ app.post("/api/uploads/images", upload.array("images", 8), async (request, respo
       const fileName = `${createId("upload")}.${extension}`;
       const url = isObjectStorageEnabled()
         ? await putObjectStorageObject({
-            key: buildObjectStorageKey("uploads", createStorageSafeFileName(file.originalname || fileName, `.${extension}`)),
+            key: buildObjectStorageKey("uploads", fileName),
             body: file.buffer,
             contentType: file.mimetype,
           })
@@ -2755,17 +2954,26 @@ async function ensureDataFiles() {
   await mkdir(DATA_DIR, { recursive: true });
   await mkdir(UPLOADS_DIR, { recursive: true });
   await mkdir(LOGS_DIR, { recursive: true });
+  const preferPostgres = isPostgresEnabled() && process.env.DB_READ_PRIMARY === "postgres";
+  let postgresSnapshot: Awaited<ReturnType<typeof loadLegacyStateFromPostgres>> | null = null;
+  if (preferPostgres) {
+    try {
+      postgresSnapshot = await loadLegacyStateFromPostgres();
+      console.log("[db] loaded legacy runtime snapshot from PostgreSQL");
+    } catch (error) {
+      console.warn("[db] failed to load PostgreSQL snapshot, falling back to JSON files", error);
+    }
+  }
+
   try {
-    const raw = await readFile(JOBS_FILE, "utf8");
-    const savedJobs = JSON.parse(raw) as ImageJob[];
+    const savedJobs = (postgresSnapshot?.imageJobs ?? JSON.parse(await readFile(JOBS_FILE, "utf8"))) as ImageJob[];
     for (const job of savedJobs) jobs.set(job.id, job);
   } catch {
     await writeFile(JOBS_FILE, "[]", "utf8");
   }
 
   try {
-    const raw = await readFile(APP_STATE_FILE, "utf8");
-    const savedState = JSON.parse(raw) as Record<string, string>;
+    const savedState = postgresSnapshot?.appState ?? JSON.parse(await readFile(APP_STATE_FILE, "utf8")) as Record<string, string>;
     for (const [key, value] of Object.entries(savedState)) {
       if (typeof value === "string") appState.set(key, value);
     }
@@ -2774,8 +2982,7 @@ async function ensureDataFiles() {
   }
 
   try {
-    const raw = await readFile(AGENTS_FILE, "utf8");
-    const savedAgents = JSON.parse(raw) as Agent[];
+    const savedAgents = (postgresSnapshot?.agents ?? JSON.parse(await readFile(AGENTS_FILE, "utf8"))) as Agent[];
     for (const agent of savedAgents) agents.set(agent.id, agent);
   } catch {
     await writeFile(AGENTS_FILE, "[]", "utf8");
@@ -2810,6 +3017,43 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isRetryableFileReplaceError(error: unknown) {
+  const code = typeof error === "object" && error !== null && "code" in error
+    ? String((error as { code?: unknown }).code)
+    : "";
+  return code === "EPERM" || code === "EACCES" || code === "EBUSY";
+}
+
+async function replaceFileWithRetry(tempFile: string, targetFile: string, label: string) {
+  const maxAttempts = 6;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await rename(tempFile, targetFile);
+      return;
+    } catch (error) {
+      if (!isRetryableFileReplaceError(error) || attempt === maxAttempts) throw error;
+      console.warn(`[${label}] file replace busy, retrying`, {
+        attempt,
+        targetFile,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await sleep(40 * attempt);
+    }
+  }
+}
+
+async function writeJsonFileAtomically(filePath: string, value: unknown, label: string) {
+  await mkdir(dirname(filePath), { recursive: true });
+  const tempFile = `${filePath}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(tempFile, JSON.stringify(value, null, 2), "utf8");
+    await replaceFileWithRetry(tempFile, filePath, label);
+  } catch (error) {
+    await rm(tempFile, { force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
 function sanitizeJobForPersistence(value: unknown): unknown {
   if (typeof value === "string") {
     if (/^data:image\//i.test(value)) return `<data-image omitted length=${value.length}>`;
@@ -2828,11 +3072,9 @@ function sanitizeJobForPersistence(value: unknown): unknown {
 
 function saveJobsSoon() {
   saveChain = saveChain.then(async () => {
-    await mkdir(dirname(JOBS_FILE), { recursive: true });
-    const tempFile = `${JOBS_FILE}.tmp`;
     const persistedJobs = Array.from(jobs.values()).map((job) => sanitizeJobForPersistence(job));
-    await writeFile(tempFile, JSON.stringify(persistedJobs, null, 2), "utf8");
-    await rename(tempFile, JOBS_FILE);
+    await writeJsonFileAtomically(JOBS_FILE, persistedJobs, "jobs");
+    await saveImageJobsSnapshotToPostgres(persistedJobs);
   }).catch((error) => {
     console.error("[jobs] failed to save jobs", error);
   });
@@ -2841,10 +3083,7 @@ function saveJobsSoon() {
 
 function saveAppStateSoon() {
   appStateSaveChain = appStateSaveChain.then(async () => {
-    await mkdir(dirname(APP_STATE_FILE), { recursive: true });
-    const tempFile = `${APP_STATE_FILE}.tmp`;
-    await writeFile(tempFile, JSON.stringify(Object.fromEntries(appState.entries()), null, 2), "utf8");
-    await rename(tempFile, APP_STATE_FILE);
+    await writeJsonFileAtomically(APP_STATE_FILE, Object.fromEntries(appState.entries()), "app-state");
   }).catch((error) => {
     console.error("[app-state] failed to save state", error);
   });
@@ -2853,10 +3092,9 @@ function saveAppStateSoon() {
 
 function saveAgentsSoon() {
   agentsSaveChain = agentsSaveChain.then(async () => {
-    await mkdir(dirname(AGENTS_FILE), { recursive: true });
-    const tempFile = `${AGENTS_FILE}.tmp`;
-    await writeFile(tempFile, JSON.stringify(Array.from(agents.values()), null, 2), "utf8");
-    await rename(tempFile, AGENTS_FILE);
+    const persistedAgents = Array.from(agents.values());
+    await writeJsonFileAtomically(AGENTS_FILE, persistedAgents, "agents");
+    await saveAgentsSnapshotToPostgres(persistedAgents);
   }).catch((error) => {
     console.error("[agents] failed to save agents", error);
   });
@@ -2865,10 +3103,8 @@ function saveAgentsSoon() {
 
 function saveEmailConfigSoon() {
   emailConfigSaveChain = emailConfigSaveChain.then(async () => {
-    await mkdir(dirname(EMAIL_CONFIG_FILE), { recursive: true });
-    const tempFile = `${EMAIL_CONFIG_FILE}.tmp`;
-    await writeFile(tempFile, JSON.stringify(emailConfig, null, 2), "utf8");
-    await rename(tempFile, EMAIL_CONFIG_FILE);
+    await writeJsonFileAtomically(EMAIL_CONFIG_FILE, emailConfig, "email-config");
+    await saveConfigDocumentToPostgres("email-config", emailConfig);
   }).catch((error) => {
     console.error("[email-config] failed to save config", error);
   });
@@ -2877,10 +3113,8 @@ function saveEmailConfigSoon() {
 
 function saveObjectStorageConfigSoon() {
   storageConfigSaveChain = storageConfigSaveChain.then(async () => {
-    await mkdir(dirname(STORAGE_CONFIG_FILE), { recursive: true });
-    const tempFile = `${STORAGE_CONFIG_FILE}.tmp`;
-    await writeFile(tempFile, JSON.stringify(objectStorageConfig, null, 2), "utf8");
-    await rename(tempFile, STORAGE_CONFIG_FILE);
+    await writeJsonFileAtomically(STORAGE_CONFIG_FILE, objectStorageConfig, "storage-config");
+    await saveConfigDocumentToPostgres("storage-config", objectStorageConfig);
   }).catch((error) => {
     console.error("[storage-config] failed to save config", error);
   });
@@ -2889,10 +3123,8 @@ function saveObjectStorageConfigSoon() {
 
 function saveStyleLibrarySoon() {
   styleLibrarySaveChain = styleLibrarySaveChain.then(async () => {
-    await mkdir(dirname(STYLE_LIBRARY_FILE), { recursive: true });
-    const tempFile = `${STYLE_LIBRARY_FILE}.tmp`;
-    await writeFile(tempFile, JSON.stringify(styleLibrary, null, 2), "utf8");
-    await rename(tempFile, STYLE_LIBRARY_FILE);
+    await writeJsonFileAtomically(STYLE_LIBRARY_FILE, styleLibrary, "style-library");
+    await saveConfigDocumentToPostgres("style-library", styleLibrary);
   }).catch((error) => {
     console.error("[style-library] failed to save library", error);
   });
@@ -3820,6 +4052,14 @@ app.all("/api/openai-compatible/*path", async (request, response) => {
  body: method === "POST" ? JSON.stringify(payload ?? {}) : undefined,
  });
  const responseText = await upstreamResponse.text();
+ const clientTaskId = typeof request.headers["x-client-task-id"] === "string" ? request.headers["x-client-task-id"].trim() : "";
+ if (clientTaskId && method === "POST" && /\/(?:chat\/completions|images\/generations|images\/edits|responses)(?:\?|$)/i.test(targetUrl)) {
+   try {
+     generationResultCache.set(clientTaskId, { createdAt: Date.now(), request: payload, response: JSON.parse(responseText) });
+   } catch {
+     generationResultCache.set(clientTaskId, { createdAt: Date.now(), request: payload, response: responseText });
+   }
+ }
 
  console.log("[openai-compatible] upstream response", sanitizeValue({
  providerId: provider.id,
@@ -3884,6 +4124,14 @@ app.all("/api/openai-compatible", async (request, response) => {
  body: method === "POST" ? JSON.stringify(payload ?? {}) : undefined,
  });
  const responseText = await upstreamResponse.text();
+ const clientTaskId = typeof request.headers["x-client-task-id"] === "string" ? request.headers["x-client-task-id"].trim() : "";
+ if (clientTaskId && method === "POST" && /\/(?:chat\/completions|images\/generations|images\/edits|responses)(?:\?|$)/i.test(targetUrl)) {
+   try {
+     generationResultCache.set(clientTaskId, { createdAt: Date.now(), request: payload, response: JSON.parse(responseText) });
+   } catch {
+     generationResultCache.set(clientTaskId, { createdAt: Date.now(), request: payload, response: responseText });
+   }
+ }
  response.status(upstreamResponse.status);
  response.setHeader("Content-Type", upstreamResponse.headers.get("content-type") || "application/json");
  response.setHeader("Cache-Control", "no-cache");
@@ -3981,11 +4229,13 @@ app.post("/api/image-jobs", upload.none(), (request, response) => {
     });
   }
 
-  if (!provider || typeof provider.baseUrl !== "string" || typeof provider.key !== "string" || !payload) {
+  const providerBaseUrl = typeof provider?.baseUrl === "string" ? provider.baseUrl.trim() : "";
+  const providerKey = typeof provider?.key === "string" ? provider.key.trim() : "";
+  if (!provider || !providerBaseUrl || !providerKey || !payload) {
     logImageJob(clientTaskId ?? "job-request", "request.invalid", {
       hasProvider: Boolean(provider),
-      hasProviderBaseUrl: typeof provider?.baseUrl === "string",
-      hasProviderKey: typeof provider?.key === "string" && Boolean(provider.key),
+      hasProviderBaseUrl: Boolean(providerBaseUrl),
+      hasProviderKey: Boolean(providerKey),
       hasPayload: Boolean(payload),
     });
     response.status(400).json({ error: "provider.baseUrl, provider.key and payload are required" });
@@ -4009,8 +4259,8 @@ app.post("/api/image-jobs", upload.none(), (request, response) => {
     provider: {
       id: typeof provider.id === "string" ? provider.id : undefined,
       name: typeof provider.name === "string" ? provider.name : undefined,
-      baseUrl: provider.baseUrl,
-      key: provider.key,
+      baseUrl: providerBaseUrl,
+      key: providerKey,
       logAccessToken: typeof provider.logAccessToken === "string" ? provider.logAccessToken : undefined,
       headers: typeof provider.headers === "object" && provider.headers ? provider.headers as Record<string, string> : undefined,
     },
@@ -4105,6 +4355,22 @@ app.delete("/api/image-jobs/:id/asset", async (request, response) => {
   updateJob(job.id, { resultUrl: undefined });
   response.json({ ok: true });
 });
+
+if (process.env.SERVE_FRONTEND !== "0") {
+  app.use(express.static(FRONTEND_DIST_DIR, {
+    fallthrough: true,
+    index: false,
+    maxAge: process.env.NODE_ENV === "production" ? "1h" : 0,
+  }));
+
+  app.get(/^(?!\/(?:api|uploads|health)(?:\/|$)).*/, async (_request, response, next) => {
+    try {
+      response.sendFile(FRONTEND_INDEX_FILE);
+    } catch (error) {
+      next(error);
+    }
+  });
+}
 
 await ensureDataFiles();
 await recoverPersistedActiveJobs();

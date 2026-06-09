@@ -40,7 +40,7 @@ export function AgentSidebar({ mode = 'overlay' }: { mode?: 'overlay' | 'inline'
         </div>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {selectedAgentId ? (
           <AgentChat />
         ) : (
@@ -58,7 +58,7 @@ export function AgentSidebar({ mode = 'overlay' }: { mode?: 'overlay' | 'inline'
     }
 
     return (
-      <div className="fixed inset-y-0 right-0 z-50 h-full shrink-0 md:relative md:z-auto">
+      <div className="fixed bottom-[76px] right-0 top-0 z-50 h-auto shrink-0 md:relative md:inset-auto md:z-auto md:h-full">
         <button
           onClick={closeSidebar}
           className="absolute left-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-[#11141b] text-[#8f97aa] shadow-[0_18px_48px_rgba(0,0,0,0.35)] transition hover:bg-[#181b22] hover:text-white md:-left-8 md:top-1/2 md:h-16 md:w-8 md:-translate-y-1/2 md:rounded-l-lg md:rounded-r-none md:border-r-0"
@@ -76,7 +76,7 @@ export function AgentSidebar({ mode = 'overlay' }: { mode?: 'overlay' | 'inline'
   }
 
   return (
-    <div className="fixed bottom-0 right-0 top-0 z-50 flex">
+    <div className="fixed bottom-[76px] right-0 top-0 z-50 flex h-auto md:bottom-0">
       <button
         onClick={closeSidebar}
         className="absolute -left-8 top-1/2 flex h-16 w-8 -translate-y-1/2 items-center justify-center rounded-l-lg border border-r-0 border-white/[0.08] bg-[#11141b] text-[#8f97aa] shadow-[0_18px_48px_rgba(0,0,0,0.35)] transition hover:bg-[#181b22] hover:text-white"

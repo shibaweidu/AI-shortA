@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Bot, Eraser, Eye, FolderOpen, LayoutGrid, Rows3, Search, Sparkles, Volume2, X } from "lucide-react";
+import { ArrowLeft, Bot, Eraser, Eye, FolderOpen, LayoutGrid, Rows3, Search, Sparkles, Upload, Volume2, X } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FlowFeed } from "./FlowFeed";
 import { FlowGeneratorBar, type SelectedStyleReference } from "./FlowGeneratorBar";
@@ -30,6 +30,7 @@ import {
   pickDirectoryHandle,
   saveGeneratedAssetToDirectory,
 } from "../../services/localFiles";
+import { uploadImageFiles } from "../../services/uploads";
 import {
   generateImageAsset,
   generateVideoAsset,
@@ -182,6 +183,7 @@ export default function Flow() {
   const [duration, setDuration] = useState("10s");
   const [generationCount, setGenerationCount] = useState(1);
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [externalReferenceImages, setExternalReferenceImages] = useState<string[]>([]);
   const [referenceImageRoles, setReferenceImageRoles] = useState<Record<string, FlowReferenceRole>>({});
   const [openGeneratorPanel, setOpenGeneratorPanel] = useState<"type" | "model" | "ratio" | "count" | "assets" | "styles" | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<SelectedStyleReference | null>(null);
@@ -202,6 +204,7 @@ export default function Flow() {
   const generatorRef = useRef<HTMLDivElement>(null);
   const displayPanelRef = useRef<HTMLDivElement>(null);
   const displayButtonRef = useRef<HTMLButtonElement>(null);
+  const assetUploadInputRef = useRef<HTMLInputElement>(null);
   const isStartingGenerationRef = useRef(false);
   const localFolderSupported = isLocalFolderSaveSupported();
 
@@ -546,6 +549,34 @@ export default function Flow() {
     }
   };
 
+  const handleAssetUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (!files.length || !currentProject) return;
+
+    try {
+      const uploadedFiles = await uploadImageFiles(files);
+      for (const uploaded of uploadedFiles) {
+        addItem({
+          projectId: currentProject.id,
+          type: "image",
+          prompt: `上传的素材：${uploaded.name}`,
+          status: "completed",
+          url: uploaded.url,
+          parameters: {
+            model: "Upload",
+            modelValue: "upload",
+            aspectRatio: "16:9",
+            resolution: "2k",
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Failed to upload asset:", error);
+      alert(`上传素材失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
   const handleGenerate = async () => {
     if (isStartingGenerationRef.current) return;
     if (!currentProject || (!prompt.trim() && referenceImages.length === 0) || !model) return;
@@ -600,6 +631,7 @@ export default function Flow() {
       if (index === 0) {
         setPrompt("");
         setReferenceImages([]);
+        setExternalReferenceImages([]);
         setReferenceImageRoles({});
         setOpenGeneratorPanel(null);
         isStartingGenerationRef.current = false;
@@ -736,7 +768,11 @@ export default function Flow() {
     if (item.savedFileName) {
       referenceUrl = (await getDataUrlFromPersistedAssetFile(item.id).catch(() => null)) ?? item.url;
     }
-    setReferenceImages((current) => (current.includes(referenceUrl) ? current : [...current, referenceUrl]));
+    setReferenceImages((current) => {
+      const existingIndex = current.indexOf(referenceUrl);
+      return existingIndex >= 0 ? current : [...current, referenceUrl];
+    });
+    setExternalReferenceImages((current) => (current.includes(referenceUrl) ? current : [...current, referenceUrl]));
     setReferenceImageRoles((current) => ({ ...current, [referenceUrl]: current[referenceUrl] ?? "general" }));
   };
 
@@ -809,6 +845,25 @@ export default function Flow() {
                 <span className="ml-1.5 text-[10px] sm:ml-2 sm:text-xs opacity-70">{count}</span>
               </button>
             ))}
+
+            {/* Upload asset button */}
+            <input
+              ref={assetUploadInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleAssetUpload}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => assetUploadInputRef.current?.click()}
+              className="rounded-lg px-2.5 py-1.5 text-xs sm:rounded-xl sm:px-4 sm:py-2 sm:text-sm transition whitespace-nowrap border border-white/[0.06] bg-white/[0.03] text-[#8f97aa] hover:text-white flex items-center gap-1.5"
+              title="上传素材到当前项目"
+            >
+              <Upload className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+              <span className="hidden sm:inline">上传素材</span>
+            </button>
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2">
             <span className="text-[10px] sm:text-xs text-[#758099] whitespace-nowrap">排序</span>
@@ -1058,6 +1113,8 @@ export default function Flow() {
                 onGenerationCountChange={setGenerationCount}
             referenceImages={referenceImages}
             onReferenceImagesChange={setReferenceImages}
+            externalReferenceImages={externalReferenceImages}
+            onExternalReferenceImagesChange={setExternalReferenceImages}
             referenceImageRoles={referenceImageRoles}
             onReferenceImageRolesChange={setReferenceImageRoles}
             selectedStyle={selectedStyle}

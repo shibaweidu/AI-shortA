@@ -1,0 +1,16 @@
+services:
+  ai-shorta:
+    environment:
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:?set PUBLIC_BASE_URL}"
+      DATABASE_URL: "${DATABASE_URL:?set DATABASE_URL}"
+      DB_AUTO_MIGRATE: "${DB_AUTO_MIGRATE:-1}"
+      DB_IMPORT_JSON_ON_START: "${DB_IMPORT_JSON_ON_START:-0}"
+      DB_DUAL_WRITE: "${DB_DUAL_WRITE:-1}"
+      DB_READ_PRIMARY: "${DB_READ_PRIMARY:-json}"
+      IMAGE_JOB_CONCURRENCY: "${IMAGE_JOB_CONCURRENCY:-2}"
+
+  postgres:
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-ai_shorta}"
+      POSTGRES_USER: "${POSTGRES_USER:-ai_shorta}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}"

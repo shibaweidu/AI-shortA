@@ -72,7 +72,7 @@ export default function Auth() {
 
   const submit = async () => {
     if (mode === "login") {
-      const result = login({ username: email || username, password });
+      const result = await login({ username: email || username, password });
       if (!result.ok) {
         setMessageType("error");
         setMessage(result.message);
@@ -112,7 +112,7 @@ export default function Auth() {
     setMessage("");
     try {
       await verifyRegistrationEmailCode(email, emailCode.trim());
-      const result = register({ username: email, password, displayName: displayName.trim() });
+      const result = await register({ username: email, password, displayName: displayName.trim() });
       if (!result.ok) {
         setMessageType("error");
         setMessage(result.message);

@@ -11,7 +11,7 @@ import { cn } from "../../lib/utils";
 import { useSettingsStore, type ModelType, type ProviderConfig } from "../../store/settingsStore";
 import { useUserModelStore } from "../../store/userModelStore";
 
-const BACKEND_API = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "http://127.0.0.1:8787";
+const BACKEND_API = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "";
 
 function makeBackendUrl(path: string) {
  return `${BACKEND_API}${path.startsWith("/") ? path : `/${path}`}`;

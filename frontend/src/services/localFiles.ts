@@ -1,7 +1,7 @@
 import { normalizeImageDataUrlMime } from "./referenceImages";
 
 const API_PROXY = "/api-proxy";
-const BACKEND_API = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "http://127.0.0.1:8787";
+const BACKEND_API = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "";
 const DB_NAME = "ai-director-local-files";
 const STORE_NAME = "handles";
 const DIRECTORY_HANDLE_KEY = "save-directory";

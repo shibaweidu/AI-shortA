@@ -61,15 +61,15 @@ export default function AdminUsers() {
                   <div className="grid grid-cols-3 gap-3 text-center">
                     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-3 py-2">
                       <div className="text-lg font-semibold text-white">{account?.balance ?? 0}</div>
-                      <div className="text-[11px] text-[#8f97aa]">余额</div>
+                      <div className="text-[11px] text-[#8f97aa]">积分余额</div>
                     </div>
                     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-3 py-2">
                       <div className="text-lg font-semibold text-white">{account?.totalEarned ?? 0}</div>
-                      <div className="text-[11px] text-[#8f97aa]">累计获得</div>
+                      <div className="text-[11px] text-[#8f97aa]">累计获得积分</div>
                     </div>
                     <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] px-3 py-2">
                       <div className="text-lg font-semibold text-white">{userTransactions.length}</div>
-                      <div className="text-[11px] text-[#8f97aa]">流水</div>
+                      <div className="text-[11px] text-[#8f97aa]">积分流水</div>
                     </div>
                   </div>
 
@@ -89,7 +89,7 @@ export default function AdminUsers() {
                       }}
                       className="h-9 rounded-xl bg-cyan-400 px-3 text-black hover:bg-cyan-300"
                     >
-                      调整
+                      调整积分
                     </Button>
                     <Button
                       type="button"

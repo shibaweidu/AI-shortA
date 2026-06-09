@@ -1,7 +1,7 @@
 import type { FlowReferenceRole } from "../store/flowStore";
 import type { ProviderConfig } from "../store/settingsStore";
 
-const BACKEND_API = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "http://127.0.0.1:8787";
+const BACKEND_API = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "";
 
 export interface ReferenceSettings {
   visionModelValue: string;

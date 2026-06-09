@@ -303,9 +303,9 @@ export default function AgentCreate() {
   };
 
   return (
-    <div className="relative flex h-full overflow-hidden">
-      <div className="mx-auto flex h-full max-w-[1760px] flex-1 flex-col overflow-hidden text-white">
-        <div className="mb-4 flex items-center justify-between gap-4">
+    <div className="relative flex h-full overflow-y-auto overflow-x-hidden xl:overflow-hidden">
+      <div className="mx-auto flex min-h-full w-full max-w-[1760px] flex-1 flex-col px-3 pb-[calc(1rem+env(safe-area-inset-bottom))] text-white sm:px-4 xl:h-full xl:overflow-hidden xl:px-0 xl:pb-0">
+        <div className="mb-4 flex shrink-0 items-center justify-between gap-4">
           <div>
             <button onClick={handleBack} className="mb-3 inline-flex items-center gap-2 text-sm text-[#8f97aa] transition hover:text-white">
               <ArrowLeft className="h-4 w-4" />
@@ -318,7 +318,7 @@ export default function AgentCreate() {
 
       <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[300px_minmax(500px,1fr)_640px] 2xl:grid-cols-[320px_minmax(560px,1fr)_720px]">
         {/* 左侧：智能体列表 */}
-        <aside className="flex min-h-0 flex-col rounded-[28px] border border-white/[0.08] bg-[#11141b]">
+        <aside className="flex min-h-[320px] flex-col rounded-[22px] border border-white/[0.08] bg-[#11141b] xl:min-h-0 xl:rounded-[28px]">
           <div className="border-b border-white/[0.06] px-4 py-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
@@ -394,7 +394,7 @@ export default function AgentCreate() {
         </aside>
 
         {/* 中间：表单 */}
-        <section className="flex min-h-0 flex-col rounded-[28px] border border-white/[0.08] bg-[#11141b]">
+        <section className="flex min-h-[520px] flex-col rounded-[22px] border border-white/[0.08] bg-[#11141b] xl:min-h-0 xl:rounded-[28px]">
           <div className="border-b border-white/[0.06] px-5 py-4">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-300">
@@ -523,7 +523,7 @@ export default function AgentCreate() {
         </section>
 
         {/* 右侧：AI 助手 */}
-        <aside className="flex min-h-0 flex-col rounded-[28px] border border-white/[0.08] bg-[#11141b]">
+        <aside className="flex min-h-[72dvh] flex-col rounded-[22px] border border-white/[0.08] bg-[#11141b] xl:min-h-0 xl:rounded-[28px]">
           <div className="border-b border-white/[0.06] px-5 py-4">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-purple-400/10 text-purple-300">
@@ -585,7 +585,7 @@ export default function AgentCreate() {
                 {isAssistantLoading && <Loader2 className="h-5 w-5 animate-spin text-[#8f97aa]" />}
               </div>
 
-              <div className="border-t border-white/[0.045] p-4">
+              <div className="sticky bottom-0 border-t border-white/[0.045] bg-[#11141b] p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4 xl:static xl:pb-4">
                 <div className="relative rounded-[22px] border border-white/[0.05] bg-[#181a20] shadow-[0_18px_44px_rgba(0,0,0,0.30)]">
                   <div className="px-4 pb-3 pt-3">
                     <textarea
@@ -603,12 +603,12 @@ export default function AgentCreate() {
                     />
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-1.5 border-t border-white/[0.045] px-4 pb-3 pt-2.5">
-                    <div className="relative">
+                  <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto border-t border-white/[0.045] px-4 pb-3 pt-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="relative shrink-0">
                       <button
                         type="button"
                         onClick={() => setOpenAssistantPanel(openAssistantPanel === 'model' ? null : 'model')}
-                        className="inline-flex h-[34px] max-w-[260px] items-center gap-2 rounded-[10px] border border-white/8 bg-[#2a2d35] px-3 text-[13px] font-medium text-white transition hover:border-white/14"
+                        className="inline-flex h-[34px] max-w-[calc(100vw-104px)] shrink-0 items-center gap-2 rounded-[10px] border border-white/8 bg-[#2a2d35] px-3 text-[13px] font-medium text-white transition hover:border-white/14 sm:max-w-[260px]"
                       >
                         {selectedModelOption?.imageUrl ? (
                           <img src={selectedModelOption.imageUrl} alt={selectedModelOption.label} className="h-5 w-5 rounded-md object-contain" />
@@ -620,9 +620,9 @@ export default function AgentCreate() {
                       </button>
 
                       {openAssistantPanel === 'model' ? (
-                        <div className="absolute bottom-[calc(100%+10px)] left-0 z-30 w-[420px] max-w-[calc(100vw-96px)] rounded-[14px] bg-[#1C1C1E] p-3 shadow-[0_24px_50px_rgba(0,0,0,0.45)]">
+                        <div className="fixed inset-x-3 bottom-[calc(172px+env(safe-area-inset-bottom))] z-30 max-h-[52dvh] overflow-hidden rounded-[14px] bg-[#1C1C1E] p-3 shadow-[0_24px_50px_rgba(0,0,0,0.45)] sm:absolute sm:inset-x-auto sm:bottom-[calc(100%+10px)] sm:left-0 sm:w-[420px] sm:max-w-[calc(100vw-96px)]">
                           <div className="mb-3 text-sm font-medium text-[#ffffff90]">选择文本模型</div>
-                          <div className="max-h-[300px] space-y-2 overflow-y-auto pr-1">
+                          <div className="max-h-[44dvh] space-y-2 overflow-y-auto pr-1 sm:max-h-[300px]">
                             {textModelOptions.length ? (
                               textModelOptions.map((option) => {
                                 const selected = option.value === selectedModel;
@@ -686,7 +686,7 @@ export default function AgentCreate() {
                       ) : null}
                     </div>
 
-                    <div className="ml-auto flex items-center gap-3">
+                    <div className="ml-auto flex shrink-0 items-center gap-3">
                       <button
                         disabled={!assistantInput.trim() || isAssistantLoading || !selectedModelOption}
                         onClick={handleAssistantSend}

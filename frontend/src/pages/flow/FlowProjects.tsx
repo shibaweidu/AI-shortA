@@ -62,6 +62,7 @@ export default function FlowProjects() {
   const [duration, setDuration] = useState("10s");
   const [generationCount, setGenerationCount] = useState(1);
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [externalReferenceImages, setExternalReferenceImages] = useState<string[]>([]);
   const [referenceImageRoles, setReferenceImageRoles] = useState<Record<string, FlowReferenceRole>>({});
   const [openGeneratorPanel, setOpenGeneratorPanel] = useState<"type" | "model" | "ratio" | "count" | "assets" | "styles" | null>(null);
   const [selectedStyle, setSelectedStyle] = useState<SelectedStyleReference | null>(null);
@@ -565,6 +566,8 @@ export default function FlowProjects() {
             onGenerationCountChange={setGenerationCount}
             referenceImages={referenceImages}
             onReferenceImagesChange={setReferenceImages}
+            externalReferenceImages={externalReferenceImages}
+            onExternalReferenceImagesChange={setExternalReferenceImages}
             referenceImageRoles={referenceImageRoles}
             onReferenceImageRolesChange={setReferenceImageRoles}
             selectedStyle={selectedStyle}

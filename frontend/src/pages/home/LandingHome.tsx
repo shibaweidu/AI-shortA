@@ -71,6 +71,7 @@ export default function LandingHome() {
   const [duration, setDuration] = useState("10s");
   const [generationCount, setGenerationCount] = useState(1);
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [externalReferenceImages, setExternalReferenceImages] = useState<string[]>([]);
   const [referenceImageRoles, setReferenceImageRoles] = useState<Record<string, FlowReferenceRole>>({});
   const [selectedStyle, setSelectedStyle] = useState<SelectedStyleReference | null>(null);
   const [openGeneratorPanel, setOpenGeneratorPanel] = useState<"type" | "model" | "ratio" | "count" | "assets" | "styles" | null>(null);
@@ -392,6 +393,8 @@ export default function LandingHome() {
                 onGenerationCountChange={setGenerationCount}
                 referenceImages={referenceImages}
                 onReferenceImagesChange={setReferenceImages}
+                externalReferenceImages={externalReferenceImages}
+                onExternalReferenceImagesChange={setExternalReferenceImages}
                 referenceImageRoles={referenceImageRoles}
                 onReferenceImageRolesChange={setReferenceImageRoles}
                 selectedStyle={selectedStyle}

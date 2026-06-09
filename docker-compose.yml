@@ -5,14 +5,45 @@ services:
     restart: unless-stopped
     environment:
       PORT: "8787"
-      VITE_BACKEND_URL: "https://ai.appkaola.com"
+      NODE_ENV: "production"
+      PUBLIC_BASE_URL: "https://ai.appkaola.com"
+      DATABASE_URL: "${DATABASE_URL:-postgres://ai_shorta:change-me@postgres:5432/ai_shorta}"
+      DB_AUTO_MIGRATE: "1"
+      DB_IMPORT_JSON_ON_START: "${DB_IMPORT_JSON_ON_START:-0}"
+      DB_DUAL_WRITE: "1"
+      DB_READ_PRIMARY: "json"
+      RATE_LIMIT_MAX_REQUESTS: "${RATE_LIMIT_MAX_REQUESTS:-300}"
     ports:
-      - "127.0.0.1:5173:5173"
       - "127.0.0.1:8787:8787"
     volumes:
       - backend-data:/app/backend/data
       - backend-uploads:/app/backend/uploads
       - backend-logs:/app/backend/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:8787/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ai-shorta-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ai_shorta
+      POSTGRES_USER: ai_shorta
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-change-me}"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ai_shorta -d ai_shorta"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   caddy:
     image: caddy:2-alpine
@@ -33,5 +64,6 @@ volumes:
   backend-data:
   backend-uploads:
   backend-logs:
+  postgres-data:
   caddy-data:
   caddy-config:

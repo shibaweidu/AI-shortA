@@ -47,8 +47,8 @@ export default function AdminSettings() {
     void fetchReferenceSettings().then(setReferenceSettings);
   }, []);
 
-  const save = () => {
-    const result = updateAccount({ username, password, currentPassword });
+  const save = async () => {
+    const result = await updateAccount({ username, password, currentPassword });
     if (!result.ok) {
       setMessage({ type: "error", text: result.message });
       return;
@@ -199,7 +199,7 @@ export default function AdminSettings() {
               {message.text}
             </div>
           ) : null}
-          <Button type="button" onClick={save} className="h-11 rounded-xl bg-cyan-400 px-5 text-black hover:bg-cyan-300">
+          <Button type="button" onClick={() => void save()} className="h-11 rounded-xl bg-cyan-400 px-5 text-black hover:bg-cyan-300">
             保存管理员账号
           </Button>
         </div>

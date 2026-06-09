@@ -387,8 +387,8 @@ export function AgentChat() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-3 border-b border-white/[0.06] px-4 py-3">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="flex shrink-0 items-center gap-3 border-b border-white/[0.06] px-4 py-3">
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold text-white">{agent.name}</h3>
           <p className="truncate text-xs text-gray-400">{agent.description}</p>
@@ -403,7 +403,7 @@ export function AgentChat() {
         </button>
       </div>
 
-      <div className="border-b border-white/[0.06] px-4 py-2">
+      <div className="shrink-0 border-b border-white/[0.06] px-4 py-2">
         <div className="flex items-center gap-2">
           <select
             value={currentConversationId ?? ''}
@@ -457,7 +457,7 @@ export function AgentChat() {
         </div>
       </div>
 
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         {conversation.messages.length === 0 ? (
           <div className="py-12 text-center text-gray-500">
             <p className="text-sm">开始与 {agent.name} 对话</p>
@@ -523,7 +523,7 @@ export function AgentChat() {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="border-t border-white/[0.045] p-3 sm:p-4">
+      <div className="shrink-0 border-t border-white/[0.045] bg-[#08090d] p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:p-4 sm:pb-4">
         <div className="relative rounded-[22px] border border-white/[0.05] bg-[#181a20] shadow-[0_18px_44px_rgba(0,0,0,0.30)]">
           {attachments.length ? (
             <div className="flex gap-2 px-3 pb-1 pt-3 sm:px-4">
@@ -558,24 +558,24 @@ export function AgentChat() {
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5 border-t border-white/[0.045] px-3 pb-3 pt-2.5 sm:px-4">
+          <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto border-t border-white/[0.045] px-3 pb-3 pt-2.5 [scrollbar-width:none] sm:flex-wrap sm:px-4 [&::-webkit-scrollbar]:hidden">
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploadingAttachment}
-              className="inline-flex h-[34px] w-[34px] items-center justify-center rounded-[10px] border border-white/8 bg-[#2a2d35] text-[18px] font-medium text-[#cfd6e2] transition hover:border-white/14 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] border border-white/8 bg-[#2a2d35] text-[18px] font-medium text-[#cfd6e2] transition hover:border-white/14 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
               title="上传文件"
             >
               {isUploadingAttachment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             </button>
             <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileUpload} className="hidden" />
 
-            <div className="static md:relative">
+            <div className="static shrink-0 md:relative">
               <button
                 type="button"
                 onClick={() => setOpenPanel(openPanel === 'assets' ? null : 'assets')}
                 className={cn(
-                  'inline-flex h-[34px] items-center gap-2 rounded-[10px] border border-white/8 bg-[#2a2d35] px-3 text-[13px] font-medium text-[#cfd6e2] transition hover:border-white/14 hover:text-white',
+                  'inline-flex h-[34px] shrink-0 items-center gap-2 whitespace-nowrap rounded-[10px] border border-white/8 bg-[#2a2d35] px-3 text-[13px] font-medium text-[#cfd6e2] transition hover:border-white/14 hover:text-white',
                   attachments.length > 0 && 'border-cyan-300/25 bg-cyan-300/10 text-cyan-100'
                 )}
                 title="引用素材"
@@ -586,7 +586,7 @@ export function AgentChat() {
               </button>
 
               {openPanel === 'assets' ? (
-                <div className="absolute inset-x-3 bottom-[calc(100%+10px)] z-40 flex max-h-[70vh] overflow-hidden rounded-2xl border border-white/8 bg-[#1b1e25] shadow-[0_28px_60px_rgba(0,0,0,0.55)] md:inset-x-auto md:right-0 md:w-[min(720px,calc(100vw-300px))]">
+                <div className="fixed inset-x-3 bottom-[calc(176px+env(safe-area-inset-bottom))] z-40 flex max-h-[48dvh] overflow-hidden rounded-2xl border border-white/8 bg-[#1b1e25] shadow-[0_28px_60px_rgba(0,0,0,0.55)] md:absolute md:inset-x-auto md:bottom-[calc(100%+10px)] md:right-0 md:max-h-[70vh] md:w-[min(720px,calc(100vw-300px))]">
                   <div className="flex min-h-0 w-full flex-col md:w-[420px] md:shrink-0">
                     <div className="grid grid-cols-2 gap-2 border-b border-white/[0.06] px-3 py-2 md:flex md:items-center">
                       <select
@@ -688,11 +688,11 @@ export function AgentChat() {
               ) : null}
             </div>
 
-            <div className="relative">
+            <div className="relative shrink-0">
               <button
                 type="button"
                 onClick={() => setOpenPanel(openPanel === 'model' ? null : 'model')}
-                className="inline-flex h-[34px] max-w-[220px] items-center gap-2 rounded-[10px] border border-white/8 bg-[#2a2d35] px-3 text-[13px] font-medium text-white transition hover:border-white/14"
+                className="inline-flex h-[34px] max-w-[calc(100vw-140px)] shrink-0 items-center gap-2 rounded-[10px] border border-white/8 bg-[#2a2d35] px-3 text-[13px] font-medium text-white transition hover:border-white/14 sm:max-w-[220px]"
               >
                 {selectedModelOption?.imageUrl ? (
                   <img src={selectedModelOption.imageUrl} alt={selectedModelOption.label} className="h-5 w-5 rounded-md object-contain" />
@@ -704,9 +704,9 @@ export function AgentChat() {
               </button>
 
               {openPanel === 'model' ? (
-                <div className="absolute bottom-[calc(100%+10px)] right-0 z-30 w-[min(420px,calc(100vw-40px))] rounded-[14px] bg-[#1C1C1E] p-3 shadow-[0_24px_50px_rgba(0,0,0,0.45)]">
+                <div className="fixed inset-x-3 bottom-[calc(176px+env(safe-area-inset-bottom))] z-30 max-h-[48dvh] overflow-hidden rounded-[14px] bg-[#1C1C1E] p-3 shadow-[0_24px_50px_rgba(0,0,0,0.45)] sm:absolute sm:inset-x-auto sm:bottom-[calc(100%+10px)] sm:right-0 sm:w-[min(420px,calc(100vw-40px))]">
                   <div className="mb-3 text-sm font-medium text-[#ffffff90]">选择文本模型</div>
-                  <div className="max-h-[300px] space-y-2 overflow-y-auto pr-1">
+                  <div className="max-h-[44dvh] space-y-2 overflow-y-auto pr-1 sm:max-h-[300px]">
                     {modelOptions.length ? (
                       modelOptions.map((option) => {
                         const selected = option.value === selectedModel;
@@ -770,7 +770,7 @@ export function AgentChat() {
               ) : null}
             </div>
 
-            <div className="ml-auto flex items-center gap-3">
+            <div className="ml-auto flex shrink-0 items-center gap-3">
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || isLoading || !selectedModelOption}
