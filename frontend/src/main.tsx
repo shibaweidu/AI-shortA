@@ -28,6 +28,7 @@ import AdminAgents from "./pages/admin/AdminAgents";
 import AdminEmailSettings from "./pages/admin/AdminEmailSettings";
 import AdminLogs from "./pages/admin/AdminLogs";
 import AdminStorage from "./pages/admin/AdminStorage";
+import AdminData from "./pages/admin/AdminData";
 import AgentCreate from "./pages/agent/AgentCreate";
 import DiscoverWorkDetail from "./pages/discover/DiscoverWorkDetail";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH, adminPath } from "./lib/adminRoutes";
@@ -163,6 +164,10 @@ const router = createBrowserRouter([
       {
         path: "storage",
         element: <AdminStorage />,
+      },
+      {
+        path: "data",
+        element: <AdminData />,
       },
       {
         path: "logs",

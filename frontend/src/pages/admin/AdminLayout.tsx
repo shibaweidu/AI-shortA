@@ -1,5 +1,5 @@
 import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
-import { Database, FolderOpen, Image, Home, Cpu, Ticket, Users, LogOut, Package, Shield, Coins, Type, Sparkles, Mail, Palette, Terminal } from "lucide-react";
+import { Database, FolderOpen, Image, Home, Cpu, Ticket, Users, LogOut, Package, Shield, Coins, Type, Sparkles, Mail, Palette, Terminal, HardDriveDownload } from "lucide-react";
 import { ADMIN_LOGIN_PATH, adminPath } from "../../lib/adminRoutes";
 import { cn } from "../../lib/utils";
 import { useAdminAuthStore } from "../../store/adminAuthStore";
@@ -24,6 +24,7 @@ export default function AdminLayout() {
     { path: adminPath("agents"), label: "智能体管理", icon: Sparkles },
     { path: adminPath("email"), label: "邮箱配置", icon: Mail },
     { path: adminPath("storage"), label: "对象存储", icon: Database },
+    { path: adminPath("data"), label: "数据备份", icon: HardDriveDownload },
     { path: adminPath("logs"), label: "系统日志", icon: Terminal },
     { path: adminPath("settings"), label: "管理员设置", icon: Shield },
   ];

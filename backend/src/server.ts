@@ -5,7 +5,7 @@ import nodemailer from "nodemailer";
 import { DeleteObjectCommand, GetObjectCommand, HeadBucketCommand, ListObjectsV2Command, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createWriteStream } from "node:fs";
-import { appendFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readdir, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { createHash, randomInt } from "node:crypto";
 import { randomUUID } from "node:crypto";
 import { setDefaultResultOrder } from "node:dns";
@@ -38,6 +38,7 @@ const AGENTS_FILE = join(DATA_DIR, "agents.json");
 const EMAIL_CONFIG_FILE = join(DATA_DIR, "email-config.json");
 const STORAGE_CONFIG_FILE = join(DATA_DIR, "storage-config.json");
 const STYLE_LIBRARY_FILE = join(DATA_DIR, "style-library.json");
+const BACKUPS_DIR = join(DATA_DIR, "backups");
 const IMAGE_JOBS_LOG_FILE = join(LOGS_DIR, "image-jobs.log");
 const APP_STATE_LOG_FILE = join(LOGS_DIR, "app-state.log");
 const generationResultCache = new Map<string, { createdAt: number; request?: unknown; response: unknown }>();
@@ -203,6 +204,46 @@ type StylePreset = {
 type StyleLibrary = {
   categories: StyleCategory[];
   styles: StylePreset[];
+};
+
+type DataBackupManifest = {
+  version: number;
+  kind: "data-backup";
+  createdAt: number;
+  source: {
+    runtime: "json" | "postgres";
+    databaseConfigured: boolean;
+    dualWrite: boolean;
+  };
+  summary: {
+    appStateKeys: number;
+    jobs: number;
+    agents: number;
+    styles: number;
+    localUploads: number;
+    objectStorageObjects: number;
+  };
+  coverage: {
+    included: string[];
+    notIncluded: string[];
+  };
+  appState: Record<string, string>;
+  imageJobs: unknown[];
+  agents: Agent[];
+  emailConfig: EmailConfig;
+  objectStorageConfig: ObjectStorageConfig;
+  styleLibrary: StyleLibrary;
+  localUploads: Array<{
+    path: string;
+    size: number;
+    updatedAt: number;
+  }>;
+  objectStorageObjects: Array<{
+    key: string;
+    size: number;
+    updatedAt: number;
+    url: string;
+  }>;
 };
 
 type ReferenceRole = "character" | "scene" | "object" | "general";
@@ -1003,6 +1044,84 @@ app.post("/api/admin/storage-presign-upload", async (request, response) => {
     });
   } catch (error) {
     response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get("/api/admin/data/status", async (_request, response) => {
+  try {
+    response.json({
+      ok: true,
+      runtime: process.env.DB_READ_PRIMARY === "postgres" ? "postgres" : "json",
+      database: {
+        configured: isPostgresEnabled(),
+        dualWrite: shouldUsePostgresDualWrite(),
+        readPrimary: process.env.DB_READ_PRIMARY === "postgres" ? "postgres" : "json",
+      },
+      counts: getRuntimeDataCounts(),
+      backups: await listDataBackups(),
+    });
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post("/api/admin/data/migrate-postgres", async (_request, response) => {
+  if (!isPostgresEnabled()) {
+    response.status(400).json({ error: "DATABASE_URL 未配置，无法迁移到 PostgreSQL。" });
+    return;
+  }
+
+  try {
+    const result = await migrateRuntimeDataToPostgres();
+    response.json(result);
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get("/api/admin/data/backups", async (_request, response) => {
+  try {
+    response.json({ backups: await listDataBackups() });
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post("/api/admin/data/backups", async (_request, response) => {
+  try {
+    const backup = await createDataBackup();
+    response.status(201).json(backup);
+  } catch (error) {
+    response.status(500).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get("/api/admin/data/backups/:fileName", async (request, response) => {
+  try {
+    const fileName = normalizeBackupFileName(request.params.fileName);
+    if (!fileName) {
+      response.status(400).json({ error: "备份文件名无效。" });
+      return;
+    }
+    const filePath = join(BACKUPS_DIR, fileName);
+    await stat(filePath);
+    response.download(filePath, fileName);
+  } catch (error) {
+    response.status(404).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.delete("/api/admin/data/backups/:fileName", async (request, response) => {
+  try {
+    const fileName = normalizeBackupFileName(request.params.fileName);
+    if (!fileName) {
+      response.status(400).json({ error: "备份文件名无效。" });
+      return;
+    }
+    await unlink(join(BACKUPS_DIR, fileName));
+    response.json({ ok: true });
+  } catch (error) {
+    response.status(404).json({ error: error instanceof Error ? error.message : String(error) });
   }
 });
 
@@ -2950,10 +3069,215 @@ function parseReferenceClassification(content: string) {
   }
 }
 
+function getRuntimeDataCounts() {
+  return {
+    appStateKeys: appState.size,
+    jobs: jobs.size,
+    agents: agents.size,
+    styles: styleLibrary.styles.length,
+    styleCategories: styleLibrary.categories.length,
+  };
+}
+
+function normalizeBackupFileName(value: string) {
+  const fileName = basename(value);
+  if (fileName !== value) return "";
+  if (!/^ai-shorta-backup-\d{8}-\d{6}\.json$/i.test(fileName)) return "";
+  return fileName;
+}
+
+function createBackupFileName(createdAt: number) {
+  const timestamp = new Date(createdAt)
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "")
+    .replace("T", "-");
+  return `ai-shorta-backup-${timestamp}.json`;
+}
+
+async function listLocalUploadFiles() {
+  const results: Array<{ path: string; size: number; updatedAt: number }> = [];
+  async function walk(directory: string, prefix = "") {
+    let entries: Array<{ name: string; isDirectory(): boolean; isFile(): boolean }>;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const entryPath = join(directory, entry.name);
+      const relativePath = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) {
+        await walk(entryPath, relativePath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const fileStat = await stat(entryPath);
+      results.push({
+        path: relativePath,
+        size: fileStat.size,
+        updatedAt: fileStat.mtime.getTime(),
+      });
+    }
+  }
+  await walk(UPLOADS_DIR);
+  return results.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+async function listAllObjectStorageObjectsForBackup() {
+  if (!isObjectStorageEnabled()) return [];
+  const objects: Array<{ key: string; size: number; updatedAt: number; url: string }> = [];
+  let continuationToken: string | undefined;
+  const prefix = normalizeStoragePrefix(objectStorageConfig.prefix);
+
+  do {
+    const data = await createObjectStorageClient().send(new ListObjectsV2Command({
+      Bucket: objectStorageConfig.bucket,
+      Prefix: prefix,
+      ContinuationToken: continuationToken,
+      MaxKeys: 1000,
+    }));
+    for (const item of data.Contents ?? []) {
+      if (!item.Key) continue;
+      objects.push({
+        key: item.Key,
+        size: item.Size ?? 0,
+        updatedAt: item.LastModified?.getTime() ?? 0,
+        url: publicUrlForObjectKey(item.Key),
+      });
+    }
+    continuationToken = data.IsTruncated ? data.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return objects;
+}
+
+async function createDataBackupManifest(): Promise<DataBackupManifest> {
+  const imageJobs = Array.from(jobs.values()).map((job) => sanitizeJobForPersistence(job));
+  const [localUploads, objectStorageObjects] = await Promise.all([
+    listLocalUploadFiles(),
+    listAllObjectStorageObjectsForBackup().catch((error) => {
+      console.warn("[data-backup] failed to list object storage objects", error);
+      return [];
+    }),
+  ]);
+
+  return {
+    version: 1,
+    kind: "data-backup",
+    createdAt: Date.now(),
+    source: {
+      runtime: process.env.DB_READ_PRIMARY === "postgres" ? "postgres" : "json",
+      databaseConfigured: isPostgresEnabled(),
+      dualWrite: shouldUsePostgresDualWrite(),
+    },
+    summary: {
+      appStateKeys: appState.size,
+      jobs: imageJobs.length,
+      agents: agents.size,
+      styles: styleLibrary.styles.length,
+      localUploads: localUploads.length,
+      objectStorageObjects: objectStorageObjects.length,
+    },
+    coverage: {
+      included: [
+        "运行状态 JSON：app-state、image-jobs、agents",
+        "后台配置：邮箱、对象存储、风格库",
+        "本地 uploads 文件清单",
+        "对象存储对象清单",
+      ],
+      notIncluded: [
+        "本地 uploads 文件二进制内容",
+        "对象存储文件二进制内容",
+        "PostgreSQL pg_dump 物理/逻辑转储",
+        "应用源代码、构建产物、日志文件、环境变量文件",
+      ],
+    },
+    appState: Object.fromEntries(appState.entries()),
+    imageJobs,
+    agents: Array.from(agents.values()),
+    emailConfig,
+    objectStorageConfig,
+    styleLibrary,
+    localUploads,
+    objectStorageObjects,
+  };
+}
+
+async function listDataBackups() {
+  await mkdir(BACKUPS_DIR, { recursive: true });
+  const fileNames = (await readdir(BACKUPS_DIR)).filter((fileName) => normalizeBackupFileName(fileName));
+  const backups = await Promise.all(fileNames.map(async (fileName) => {
+    const filePath = join(BACKUPS_DIR, fileName);
+    const fileStat = await stat(filePath);
+    return {
+      fileName,
+      size: fileStat.size,
+      createdAt: fileStat.mtime.getTime(),
+      downloadUrl: `/api/admin/data/backups/${encodeURIComponent(fileName)}`,
+    };
+  }));
+  return backups.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+async function createDataBackup() {
+  await mkdir(BACKUPS_DIR, { recursive: true });
+  const manifest = await createDataBackupManifest();
+  const fileName = createBackupFileName(manifest.createdAt);
+  const filePath = join(BACKUPS_DIR, fileName);
+  await writeFile(filePath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  const fileStat = await stat(filePath);
+  return {
+    fileName,
+    size: fileStat.size,
+    createdAt: manifest.createdAt,
+    downloadUrl: `/api/admin/data/backups/${encodeURIComponent(fileName)}`,
+    summary: manifest.summary,
+    coverage: manifest.coverage,
+  };
+}
+
+async function migrateRuntimeDataToPostgres() {
+  await queryPostgres("select 1");
+  const previousDualWrite = process.env.DB_DUAL_WRITE;
+  process.env.DB_DUAL_WRITE = "1";
+  try {
+    await saveJobsSoon();
+    await saveAppStateSoon();
+    await saveAgentsSoon();
+    await saveEmailConfigSoon();
+    await saveObjectStorageConfigSoon();
+    await saveStyleLibrarySoon();
+
+    for (const [key, value] of appState.entries()) {
+      await saveAppStateEntryToPostgres(key, value);
+      await materializeAppStateToPostgres(key, value);
+    }
+
+    return {
+      ok: true,
+      migratedAt: Date.now(),
+      counts: getRuntimeDataCounts(),
+      database: {
+        configured: true,
+        dualWrite: shouldUsePostgresDualWrite(),
+        readPrimary: process.env.DB_READ_PRIMARY === "postgres" ? "postgres" : "json",
+      },
+    };
+  } finally {
+    if (previousDualWrite === undefined) {
+      delete process.env.DB_DUAL_WRITE;
+    } else {
+      process.env.DB_DUAL_WRITE = previousDualWrite;
+    }
+  }
+}
+
 async function ensureDataFiles() {
   await mkdir(DATA_DIR, { recursive: true });
   await mkdir(UPLOADS_DIR, { recursive: true });
   await mkdir(LOGS_DIR, { recursive: true });
+  await mkdir(BACKUPS_DIR, { recursive: true });
   const preferPostgres = isPostgresEnabled() && process.env.DB_READ_PRIMARY === "postgres";
   let postgresSnapshot: Awaited<ReturnType<typeof loadLegacyStateFromPostgres>> | null = null;
   if (preferPostgres) {
