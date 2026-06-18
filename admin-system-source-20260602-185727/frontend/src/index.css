@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer base {
+  :root {
+    /* 极致纯黑与深灰底色 */
+    --background: 0 0% 4%;       /* 更纯粹的黑 #0a0a0a */
+    --foreground: 0 0% 95%;      /* 提高白字亮度，解决模糊 #f2f2f2 */
+
+    --card: 0 0% 7%;             /* 略亮于背景的卡片 #121212 */
+    --card-foreground: 0 0% 95%;
+
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 95%;
+
+    /* 淡黄色作为主色调 (Accent) - 高级、克制、不刺眼 */
+    --primary: 45 85% 65%;       /* 香槟淡黄 #eedb5d */
+    --primary-foreground: 0 0% 10%; /* 黑色字映衬在淡黄上 */
+
+    /* 中灰色作为次级色调 */
+    --secondary: 0 0% 16%;       /* #292929 */
+    --secondary-foreground: 0 0% 88%;
+
+    /* 较暗的灰色用于边框和次要元素 */
+    --muted: 0 0% 12%;           /* #1f1f1f */
+    --muted-foreground: 0 0% 65%; /* 提高辅文亮度，防看不清 #a6a6a6 */
+
+    --accent: 45 85% 65%;        /* 同主色淡黄 */
+    --accent-foreground: 0 0% 10%;
+
+    --destructive: 0 84% 65%;    /* 红色警示略微调亮 */
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 20%;          /* 边框略微变亮使轮廓更清晰 #333 */
+    --input: 0 0% 16%;
+    --ring: 45 85% 65%;          /* 聚焦环变淡黄 */
+
+    --radius: 0.3rem;            /* 略微方正的圆角 */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  /* 增加字体渲染优化，解决模糊发虚问题 */
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+    position: relative;
+    @apply bg-background text-foreground selection:bg-primary/30 selection:text-primary;
+  }
+
+  /* 输入框和文字元素保持清晰 */
+  input, textarea, select, button {
+    font-family: inherit;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  select {
+    color-scheme: dark;
+    background-color: #1b1f29;
+    color: #f3f6fb;
+  }
+
+  select option,
+  select optgroup {
+    background-color: #11141b;
+    color: #f3f6fb;
+  }
+
+  /* 自定义滚动条风格 */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/30 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50;
+  }
+}

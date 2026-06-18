@@ -1,0 +1,159 @@
+{
+  "categories": [
+    {
+      "id": "all",
+      "name": "全部",
+      "order": 0
+    },
+    {
+      "id": "my",
+      "name": "我的风格",
+      "order": 1
+    },
+    {
+      "id": "recent",
+      "name": "最近使用",
+      "order": 2
+    },
+    {
+      "id": "3d",
+      "name": "立体风格",
+      "order": 3
+    },
+    {
+      "id": "chinese",
+      "name": "国风",
+      "order": 4
+    },
+    {
+      "id": "ip",
+      "name": "IP风格",
+      "order": 5
+    },
+    {
+      "id": "western",
+      "name": "欧美风格",
+      "order": 6
+    },
+    {
+      "id": "japanese",
+      "name": "日系风格",
+      "order": 7
+    },
+    {
+      "id": "illustration",
+      "name": "插画风格",
+      "order": 8
+    },
+    {
+      "id": "korean",
+      "name": "韩系",
+      "order": 9
+    },
+    {
+      "id": "cute",
+      "name": "可爱Q版",
+      "order": 10
+    }
+  ],
+  "styles": [
+    {
+      "id": "style-2cz4rkmymoz0wi7i",
+      "name": "风格20260510",
+      "categoryIds": [
+        "my"
+      ],
+      "coverImageUrl": "/uploads/upload-uzvl2whkmoz0wi3f.jpg",
+      "sampleImageUrls": [
+        "/uploads/upload-uzvl2whkmoz0wi3f.jpg"
+      ],
+      "prompt": "custom uploaded style reference",
+      "strength": 0.65,
+      "isNew": false,
+      "isActive": true,
+      "source": "custom",
+      "createdAt": 1778372218926,
+      "updatedAt": 1778372218926
+    },
+    {
+      "id": "style-kpop-cg",
+      "name": "KpopCG",
+      "categoryIds": [
+        "3d",
+        "korean"
+      ],
+      "coverImageUrl": "https://static-oiioii-sg.hogiai.cn/style_recommends/mnpo9im1_39c786142b2473e8.webp",
+      "sampleImageUrls": [
+        "https://static-oiioii-sg.hogiai.cn/style_recommends/mnojtb8n_3114dbe29e4fedbc.webp",
+        "https://static-oiioii-sg.hogiai.cn/style_recommends/mnpo9im1_39c786142b2473e8.webp",
+        "https://static-oiioii-sg.hogiai.cn/style_recommends/mnojr8e9_5d62e6aa1dc41c5e.webp"
+      ],
+      "prompt": "K-pop inspired glossy CG portrait style, polished skin rendering, studio lighting, fashionable styling, vibrant but controlled colors, premium entertainment poster finish.",
+      "strength": 0.7,
+      "isNew": true,
+      "isActive": true,
+      "source": "preset",
+      "createdAt": 1778368744071,
+      "updatedAt": 1778368744071
+    },
+    {
+      "id": "style-game-cg",
+      "name": "游戏CG",
+      "categoryIds": [
+        "3d",
+        "western"
+      ],
+      "coverImageUrl": "https://static-oiioii-sg.hogiai.cn/style_recommends/Nhe9bnBOkoh8LSxYaG7cMct7nDg.webp",
+      "sampleImageUrls": [
+        "https://static-oiioii-sg.hogiai.cn/style_recommends/mn2tgtajad1a164ac3985264.webp",
+        "https://static-oiioii-sg.hogiai.cn/style_recommends/EW0XbyTnUoZX44xcI1vcRtMcnjd.webp",
+        "https://static-oiioii-sg.hogiai.cn/style_recommends/SnaobGxSHoLVIXxFlOUc5QgEnBc.webp"
+      ],
+      "prompt": "high-end game cinematic CG style, dramatic key light, detailed materials, atmospheric depth, sharp concept-art composition, immersive AAA game visual finish.",
+      "strength": 0.72,
+      "isNew": false,
+      "isActive": true,
+      "source": "preset",
+      "createdAt": 1778368744071,
+      "updatedAt": 1778368744071
+    },
+    {
+      "id": "style-pixel-farm",
+      "name": "像素农场",
+      "categoryIds": [
+        "illustration",
+        "cute"
+      ],
+      "coverImageUrl": "https://static-oiioii-sg.hogiai.cn/style_recommends/mnps4e2n_f772bf318499f660.webp",
+      "sampleImageUrls": [
+        "https://static-oiioii-sg.hogiai.cn/style_recommends/mnpsa9ba_121507cc8417d426.webp",
+        "https://static-oiioii-sg.hogiai.cn/style_recommends/mnps84h8_04377ac124a68cc7.webp",
+        "https://static-oiioii-sg.hogiai.cn/style_recommends/mnps8fah_869571d3fa0df2a2.webp"
+      ],
+      "prompt": "cozy pixel-art farm game style, chunky pixel shapes, cheerful pastoral colors, soft nostalgic game interface feeling, clean readable silhouettes.",
+      "strength": 0.78,
+      "isNew": true,
+      "isActive": true,
+      "source": "preset",
+      "createdAt": 1778368744071,
+      "updatedAt": 1778368744071
+    },
+    {
+      "id": "style-ink",
+      "name": "国风水墨",
+      "categoryIds": [
+        "chinese",
+        "illustration"
+      ],
+      "coverImageUrl": "https://static-oiioii-sg.hogiai.cn/style_recommends/mmybot0eaa74e8f640da0bf4.webp",
+      "sampleImageUrls": [],
+      "prompt": "Chinese ink wash painting style, flowing brushwork, restrained mineral colors, misty negative space, elegant traditional composition, paper texture.",
+      "strength": 0.68,
+      "isNew": false,
+      "isActive": true,
+      "source": "preset",
+      "createdAt": 1778368744071,
+      "updatedAt": 1778368744071
+    }
+  ]
+}

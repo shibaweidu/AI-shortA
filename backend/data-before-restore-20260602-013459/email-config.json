@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "host": "smtp.163.com",
+  "port": 465,
+  "secure": true,
+  "username": "wwwhmapi@163.com",
+  "password": "UK2ZMY2r4pWvdxCa",
+  "fromName": "Koala AI",
+  "fromEmail": "wwwhmapi@163.com",
+  "subject": "Koala AI 注册验证码",
+  "codeTtlMinutes": 10,
+  "updatedAt": 1779034592638
+}

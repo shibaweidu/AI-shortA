@@ -1,0 +1,1478 @@
+[
+  {
+    "id": "item-3fw3tyy",
+    "status": "timeout-recoverable",
+    "createdAt": 1777781006807,
+    "updatedAt": 1777781024009,
+    "provider": {
+      "id": "custom-1777524331612",
+      "name": "xem gpt2",
+      "baseUrl": "https://ai.xem8k5.top",
+      "key": "sk-YB8z7OmZjBsv5X66AIF3WEDh3qYNdsZaY1PkHQWAoXCELWOq"
+    },
+    "request": {
+      "endpoint": "/images/generations",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "prompt": "两个性感的美女, Make the aspect ratio 16:9, resolution 2560x1440",
+        "n": 1,
+        "size": "2560x1440",
+        "aspect_ratio": "16:9"
+      },
+      "useImageEdit": false,
+      "attempts": [
+        {
+          "label": "openai images generations",
+          "endpoint": "/images/generations",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "两个性感的美女, Make the aspect ratio 16:9, resolution 2560x1440",
+            "n": 1,
+            "size": "2560x1440",
+            "aspect_ratio": "16:9"
+          },
+          "useImageEdit": false
+        }
+      ]
+    },
+    "error": "openai images generations 524:  gatewayRequestId=13997378972577042600 hint=Upstream gateway timed out before returning the generated image and did not include an upstream requestId, so the backend cannot automatically recover the result. If the provider dashboard shows a successful image, copy that image URL and attach it to this local job; otherwise use a direct/long-timeout API endpoint or ask the provider to increase the gateway/origin timeout."
+  },
+  {
+    "id": "item-44jaxqq",
+    "status": "timeout-recoverable",
+    "createdAt": 1777781186958,
+    "updatedAt": 1777781204986,
+    "provider": {
+      "id": "custom-1777524331612",
+      "name": "xem gpt2",
+      "baseUrl": "https://ai.xem8k5.top",
+      "key": "sk-YB8z7OmZjBsv5X66AIF3WEDh3qYNdsZaY1PkHQWAoXCELWOq"
+    },
+    "request": {
+      "endpoint": "/images/generations",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "prompt": "美女, Make the aspect ratio 16:9, resolution 2560x1440",
+        "n": 1,
+        "size": "2560x1440",
+        "aspect_ratio": "16:9"
+      },
+      "useImageEdit": false,
+      "attempts": [
+        {
+          "label": "openai images generations",
+          "endpoint": "/images/generations",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "美女, Make the aspect ratio 16:9, resolution 2560x1440",
+            "n": 1,
+            "size": "2560x1440",
+            "aspect_ratio": "16:9"
+          },
+          "useImageEdit": false
+        }
+      ]
+    },
+    "error": "openai images generations 524:  gatewayRequestId=5601093525019434062 hint=Upstream gateway timed out before returning the generated image and did not include an upstream requestId, so the backend cannot automatically recover the result. If the provider dashboard shows a successful image, copy that image URL and attach it to this local job; otherwise use a direct/long-timeout API endpoint or ask the provider to increase the gateway/origin timeout."
+  },
+  {
+    "id": "item-jq26rgg",
+    "status": "timeout-recoverable",
+    "createdAt": 1777835007567,
+    "updatedAt": 1777835024634,
+    "provider": {
+      "id": "custom-1777524331612",
+      "name": "xem gpt2",
+      "baseUrl": "https://ai.xem8k5.top",
+      "key": "sk-YB8z7OmZjBsv5X66AIF3WEDh3qYNdsZaY1PkHQWAoXCELWOq"
+    },
+    "request": {
+      "endpoint": "/images/generations",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "prompt": "俯视镜头视角，自上而下俯拍。画面中一位清秀美丽的少女蜷坐在地板上，双膝微微并拢，身体略显蜷缩无助。她仰起头望向镜头方向，神情楚楚可怜，柳眉轻蹙，唇瓣微抿，眼眸湿润通红，眼角挂着将落未落的晶莹泪珠，睫毛被泪水浸湿微微颤动。画面边缘伸入一只温柔的手（仅露出手部，人物不入镜），轻轻抚摸着她的头顶，指尖陷入她柔顺的发丝中，带有安抚与怜爱的意味。柔和的侧光从窗外洒入，营造出忧郁而唯美的氛围，背景虚化，景深浅，焦点集中在少女的面部表情。电影级打光，皮肤质感细腻，写实风格，情绪张力强烈。, Make the aspect ratio 16:9, resolution 2560x1440",
+        "n": 1,
+        "size": "2560x1440",
+        "aspect_ratio": "16:9"
+      },
+      "useImageEdit": false,
+      "attempts": [
+        {
+          "label": "openai images generations",
+          "endpoint": "/images/generations",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "俯视镜头视角，自上而下俯拍。画面中一位清秀美丽的少女蜷坐在地板上，双膝微微并拢，身体略显蜷缩无助。她仰起头望向镜头方向，神情楚楚可怜，柳眉轻蹙，唇瓣微抿，眼眸湿润通红，眼角挂着将落未落的晶莹泪珠，睫毛被泪水浸湿微微颤动。画面边缘伸入一只温柔的手（仅露出手部，人物不入镜），轻轻抚摸着她的头顶，指尖陷入她柔顺的发丝中，带有安抚与怜爱的意味。柔和的侧光从窗外洒入，营造出忧郁而唯美的氛围，背景虚化，景深浅，焦点集中在少女的面部表情。电影级打光，皮肤质感细腻，写实风格，情绪张力强烈。, Make the aspect ratio 16:9, resolution 2560x1440",
+            "n": 1,
+            "size": "2560x1440",
+            "aspect_ratio": "16:9"
+          },
+          "useImageEdit": false
+        }
+      ]
+    },
+    "error": "openai images generations 524:  gatewayRequestId=7388343441960507903 hint=Upstream gateway timed out before returning the generated image and did not include an upstream requestId, so the backend cannot automatically recover the result. If the provider dashboard shows a successful image, copy that image URL and attach it to this local job; otherwise use a direct/long-timeout API endpoint or ask the provider to increase the gateway/origin timeout."
+  },
+  {
+    "id": "item-qmqwt75",
+    "status": "timeout-recoverable",
+    "createdAt": 1777994959204,
+    "updatedAt": 1777995020334,
+    "provider": {
+      "id": "custom-1777701298596",
+      "name": "ljh888",
+      "baseUrl": "https://api.ljh8888.xyz",
+      "key": "sk-mHdh7kDMy4is4fDtolNTAGdGyCOLz3hGT67jfp33lNjRzE7z"
+    },
+    "request": {
+      "endpoint": "/images/edits",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "prompt": "改成3个颜色, Make the aspect ratio 1:1, resolution 1440x1440",
+        "n": 1,
+        "size": "1440x1440",
+        "aspect_ratio": "1:1"
+      },
+      "referenceImages": [
+        "<data-image omitted length=5379>"
+      ],
+      "useImageEdit": true,
+      "attempts": [
+        {
+          "label": "openai images edits",
+          "endpoint": "/images/edits",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "改成3个颜色, Make the aspect ratio 1:1, resolution 1440x1440",
+            "n": 1,
+            "size": "1440x1440",
+            "aspect_ratio": "1:1"
+          },
+          "referenceImages": [
+            "<data-image omitted length=5379>"
+          ],
+          "useImageEdit": true
+        }
+      ]
+    },
+    "error": "openai images edits 504: <html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>openresty</center>\r\n</body>\r\n</html>\r\n hint=Upstream gateway timed out before returning the generated image and did not include an upstream requestId, so the backend cannot automatically recover the result. If the provider dashboard shows a successful image, copy that image URL and attach it to this local job; otherwise use a direct/long-timeout API endpoint or ask the provider to increase the gateway/origin timeout."
+  },
+  {
+    "id": "item-68lk8vo",
+    "status": "timeout-recoverable",
+    "createdAt": 1777995246138,
+    "updatedAt": 1777995307092,
+    "provider": {
+      "id": "custom-1777701298596",
+      "name": "ljh888",
+      "baseUrl": "https://api.ljh8888.xyz",
+      "key": "sk-mHdh7kDMy4is4fDtolNTAGdGyCOLz3hGT67jfp33lNjRzE7z"
+    },
+    "request": {
+      "endpoint": "/images/generations",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "prompt": "Edit the provided reference image according to this instruction: 改成3个颜色. Do not return the original reference image unchanged. Apply the requested visual changes clearly while preserving relevant source-image structure., Make the aspect ratio 16:9, resolution 2560x1440",
+        "n": 1,
+        "size": "2560x1440",
+        "aspect_ratio": "16:9",
+        "reference_images": [
+          "<data-image omitted length=5379>"
+        ]
+      },
+      "useImageEdit": false,
+      "attempts": [
+        {
+          "label": "openai images generations",
+          "endpoint": "/images/generations",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "Edit the provided reference image according to this instruction: 改成3个颜色. Do not return the original reference image unchanged. Apply the requested visual changes clearly while preserving relevant source-image structure., Make the aspect ratio 16:9, resolution 2560x1440",
+            "n": 1,
+            "size": "2560x1440",
+            "aspect_ratio": "16:9",
+            "reference_images": [
+              "<data-image omitted length=5379>"
+            ]
+          },
+          "useImageEdit": false
+        }
+      ]
+    },
+    "error": "openai images generations 504: <html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>openresty</center>\r\n</body>\r\n</html>\r\n hint=Upstream gateway timed out before returning the generated image and did not include an upstream requestId, so the backend cannot automatically recover the result. If the provider dashboard shows a successful image, copy that image URL and attach it to this local job; otherwise use a direct/long-timeout API endpoint or ask the provider to increase the gateway/origin timeout."
+  },
+  {
+    "id": "item-izapsoz",
+    "status": "timeout-recoverable",
+    "createdAt": 1777999519667,
+    "updatedAt": 1777999580708,
+    "provider": {
+      "id": "custom-1777701298596",
+      "name": "ljh888",
+      "baseUrl": "https://api.ljh8888.xyz",
+      "key": "sk-mHdh7kDMy4is4fDtolNTAGdGyCOLz3hGT67jfp33lNjRzE7z"
+    },
+    "request": {
+      "endpoint": "/images/generations",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "prompt": "Edit the provided reference image according to this instruction: 做成3种颜色的. Do not return the original reference image unchanged. Apply the requested visual changes clearly while preserving relevant source-image structure., Make the aspect ratio 1:1, resolution 1440x1440",
+        "n": 1,
+        "size": "1440x1440",
+        "aspect_ratio": "1:1",
+        "reference_images": [
+          "<data-image omitted length=5379>"
+        ]
+      },
+      "useImageEdit": false,
+      "attempts": [
+        {
+          "label": "openai images generations",
+          "endpoint": "/images/generations",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "Edit the provided reference image according to this instruction: 做成3种颜色的. Do not return the original reference image unchanged. Apply the requested visual changes clearly while preserving relevant source-image structure., Make the aspect ratio 1:1, resolution 1440x1440",
+            "n": 1,
+            "size": "1440x1440",
+            "aspect_ratio": "1:1",
+            "reference_images": [
+              "<data-image omitted length=5379>"
+            ]
+          },
+          "useImageEdit": false
+        }
+      ]
+    },
+    "error": "openai images generations 504: <html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>openresty</center>\r\n</body>\r\n</html>\r\n hint=Upstream gateway timed out before returning the generated image and did not include an upstream requestId, so the backend cannot automatically recover the result. If the provider dashboard shows a successful image, copy that image URL and attach it to this local job; otherwise use a direct/long-timeout API endpoint or ask the provider to increase the gateway/origin timeout."
+  },
+  {
+    "id": "item-f8avcbe",
+    "status": "timeout-recoverable",
+    "createdAt": 1777999769599,
+    "updatedAt": 1777999831528,
+    "provider": {
+      "id": "custom-1777701298596",
+      "name": "ljh888",
+      "baseUrl": "https://api.ljh8888.xyz",
+      "key": "sk-mHdh7kDMy4is4fDtolNTAGdGyCOLz3hGT67jfp33lNjRzE7z"
+    },
+    "request": {
+      "endpoint": "/images/edits",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "prompt": "添加动物元素, Make the aspect ratio 1:1, resolution 1440x1440",
+        "n": 1,
+        "size": "1440x1440",
+        "aspect_ratio": "1:1"
+      },
+      "referenceImages": [
+        "<data-image omitted length=5498>"
+      ],
+      "useImageEdit": true,
+      "attempts": [
+        {
+          "label": "openai images edits",
+          "endpoint": "/images/edits",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "添加动物元素, Make the aspect ratio 1:1, resolution 1440x1440",
+            "n": 1,
+            "size": "1440x1440",
+            "aspect_ratio": "1:1"
+          },
+          "referenceImages": [
+            "<data-image omitted length=5498>"
+          ],
+          "useImageEdit": true
+        }
+      ]
+    },
+    "error": "openai images edits 504: <html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>openresty</center>\r\n</body>\r\n</html>\r\n hint=Upstream gateway timed out before returning the generated image and did not include an upstream requestId, so the backend cannot automatically recover the result. If the provider dashboard shows a successful image, copy that image URL and attach it to this local job; otherwise use a direct/long-timeout API endpoint or ask the provider to increase the gateway/origin timeout."
+  },
+  {
+    "id": "item-njxkuxs",
+    "status": "timeout-recoverable",
+    "createdAt": 1777999978002,
+    "updatedAt": 1778000038923,
+    "provider": {
+      "id": "custom-1777701298596",
+      "name": "ljh888",
+      "baseUrl": "https://api.ljh8888.xyz",
+      "key": "sk-mHdh7kDMy4is4fDtolNTAGdGyCOLz3hGT67jfp33lNjRzE7z"
+    },
+    "request": {
+      "endpoint": "/images/edits",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "prompt": "添加多个颜色, Make the aspect ratio 1:1, resolution 1440x1440",
+        "n": 1,
+        "size": "1440x1440",
+        "aspect_ratio": "1:1"
+      },
+      "referenceImages": [
+        "<data-image omitted length=5379>"
+      ],
+      "useImageEdit": true,
+      "attempts": [
+        {
+          "label": "openai images edits",
+          "endpoint": "/images/edits",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "添加多个颜色, Make the aspect ratio 1:1, resolution 1440x1440",
+            "n": 1,
+            "size": "1440x1440",
+            "aspect_ratio": "1:1"
+          },
+          "referenceImages": [
+            "<data-image omitted length=5379>"
+          ],
+          "useImageEdit": true
+        }
+      ]
+    },
+    "error": "openai images edits 504: <html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>openresty</center>\r\n</body>\r\n</html>\r\n hint=Upstream gateway timed out before returning the generated image and did not include an upstream requestId, so the backend cannot automatically recover the result. If the provider dashboard shows a successful image, copy that image URL and attach it to this local job; otherwise use a direct/long-timeout API endpoint or ask the provider to increase the gateway/origin timeout."
+  },
+  {
+    "id": "item-hkik6zg",
+    "status": "timeout-recoverable",
+    "createdAt": 1778000287407,
+    "updatedAt": 1778000348416,
+    "provider": {
+      "id": "custom-1777701298596",
+      "name": "ljh888",
+      "baseUrl": "https://api.ljh8888.xyz",
+      "key": "sk-mHdh7kDMy4is4fDtolNTAGdGyCOLz3hGT67jfp33lNjRzE7z"
+    },
+    "request": {
+      "endpoint": "/images/edits",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "prompt": "添加3种颜色, Make the aspect ratio 1:1, resolution 1440x1440",
+        "n": 1,
+        "size": "1440x1440",
+        "aspect_ratio": "1:1"
+      },
+      "referenceImages": [
+        "<data-image omitted length=5379>"
+      ],
+      "useImageEdit": true,
+      "attempts": [
+        {
+          "label": "openai images edits",
+          "endpoint": "/images/edits",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "添加3种颜色, Make the aspect ratio 1:1, resolution 1440x1440",
+            "n": 1,
+            "size": "1440x1440",
+            "aspect_ratio": "1:1"
+          },
+          "referenceImages": [
+            "<data-image omitted length=5379>"
+          ],
+          "useImageEdit": true
+        }
+      ]
+    },
+    "error": "openai images edits 504: <html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>openresty</center>\r\n</body>\r\n</html>\r\n hint=Upstream gateway timed out before returning the generated image and did not include an upstream requestId, so the backend cannot automatically recover the result. If the provider dashboard shows a successful image, copy that image URL and attach it to this local job; otherwise use a direct/long-timeout API endpoint or ask the provider to increase the gateway/origin timeout."
+  },
+  {
+    "id": "item-d03vkzh",
+    "status": "timeout-recoverable",
+    "createdAt": 1778001003737,
+    "updatedAt": 1778001065777,
+    "provider": {
+      "id": "custom-1777701298596",
+      "name": "ljh888",
+      "baseUrl": "https://api.ljh8888.xyz",
+      "key": "sk-mHdh7kDMy4is4fDtolNTAGdGyCOLz3hGT67jfp33lNjRzE7z"
+    },
+    "request": {
+      "endpoint": "/images/edits",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "prompt": "改成3种颜色, Make the aspect ratio 16:9, resolution 2560x1440",
+        "n": 1,
+        "size": "2560x1440",
+        "aspect_ratio": "16:9"
+      },
+      "referenceImages": [
+        "<data-image omitted length=5379>"
+      ],
+      "useImageEdit": true,
+      "attempts": [
+        {
+          "label": "openai images edits",
+          "endpoint": "/images/edits",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "改成3种颜色, Make the aspect ratio 16:9, resolution 2560x1440",
+            "n": 1,
+            "size": "2560x1440",
+            "aspect_ratio": "16:9"
+          },
+          "referenceImages": [
+            "<data-image omitted length=5379>"
+          ],
+          "useImageEdit": true
+        }
+      ]
+    },
+    "error": "openai images edits 504: <html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>openresty</center>\r\n</body>\r\n</html>\r\n hint=Upstream gateway timed out before returning the generated image and did not include an upstream requestId, so the backend cannot automatically recover the result. If the provider dashboard shows a successful image, copy that image URL and attach it to this local job; otherwise use a direct/long-timeout API endpoint or ask the provider to increase the gateway/origin timeout."
+  },
+  {
+    "id": "item-mxydi20",
+    "status": "timeout-recoverable",
+    "createdAt": 1778001139761,
+    "updatedAt": 1778001200794,
+    "provider": {
+      "id": "custom-1777701298596",
+      "name": "ljh888",
+      "baseUrl": "https://api.ljh8888.xyz",
+      "key": "sk-mHdh7kDMy4is4fDtolNTAGdGyCOLz3hGT67jfp33lNjRzE7z"
+    },
+    "request": {
+      "endpoint": "/images/generations",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "prompt": "Edit the provided reference image according to this instruction: 改成3种颜色. Do not return the original reference image unchanged. Apply the requested visual changes clearly while preserving relevant source-image structure., Make the aspect ratio 1:1, resolution 1440x1440",
+        "n": 1,
+        "size": "1440x1440",
+        "aspect_ratio": "1:1",
+        "reference_images": [
+          "<data-image omitted length=5379>"
+        ]
+      },
+      "useImageEdit": false,
+      "attempts": [
+        {
+          "label": "openai images generations",
+          "endpoint": "/images/generations",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "Edit the provided reference image according to this instruction: 改成3种颜色. Do not return the original reference image unchanged. Apply the requested visual changes clearly while preserving relevant source-image structure., Make the aspect ratio 1:1, resolution 1440x1440",
+            "n": 1,
+            "size": "1440x1440",
+            "aspect_ratio": "1:1",
+            "reference_images": [
+              "<data-image omitted length=5379>"
+            ]
+          },
+          "useImageEdit": false
+        }
+      ]
+    },
+    "error": "openai images generations 504: <html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>openresty</center>\r\n</body>\r\n</html>\r\n hint=Upstream gateway timed out before returning the generated image and did not include an upstream requestId, so the backend cannot automatically recover the result. If the provider dashboard shows a successful image, copy that image URL and attach it to this local job; otherwise use a direct/long-timeout API endpoint or ask the provider to increase the gateway/origin timeout."
+  },
+  {
+    "id": "item-2w74xsy",
+    "status": "timeout-recoverable",
+    "createdAt": 1778001677622,
+    "updatedAt": 1778001738958,
+    "provider": {
+      "id": "custom-1777701298596",
+      "name": "ljh888",
+      "baseUrl": "https://api.ljh8888.xyz",
+      "key": "sk-mHdh7kDMy4is4fDtolNTAGdGyCOLz3hGT67jfp33lNjRzE7z"
+    },
+    "request": {
+      "endpoint": "/images/generations",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "prompt": "Edit the provided reference image according to this instruction: 添加2种颜色. Do not return the original reference image unchanged. Apply the requested visual changes clearly while preserving relevant source-image structure., Make the aspect ratio 1:1, resolution 1440x1440",
+        "n": 1,
+        "size": "1440x1440",
+        "aspect_ratio": "1:1",
+        "reference_images": [
+          "<data-image omitted length=5379>"
+        ]
+      },
+      "useImageEdit": false,
+      "attempts": [
+        {
+          "label": "openai images generations",
+          "endpoint": "/images/generations",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "Edit the provided reference image according to this instruction: 添加2种颜色. Do not return the original reference image unchanged. Apply the requested visual changes clearly while preserving relevant source-image structure., Make the aspect ratio 1:1, resolution 1440x1440",
+            "n": 1,
+            "size": "1440x1440",
+            "aspect_ratio": "1:1",
+            "reference_images": [
+              "<data-image omitted length=5379>"
+            ]
+          },
+          "useImageEdit": false
+        }
+      ]
+    },
+    "error": "openai images generations 504: <html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>openresty</center>\r\n</body>\r\n</html>\r\n hint=Upstream gateway timed out before returning the generated image and did not include an upstream requestId, so the backend cannot automatically recover the result. If the provider dashboard shows a successful image, copy that image URL and attach it to this local job; otherwise use a direct/long-timeout API endpoint or ask the provider to increase the gateway/origin timeout."
+  },
+  {
+    "id": "item-dhfbfqp",
+    "status": "timeout-recoverable",
+    "createdAt": 1778086861136,
+    "updatedAt": 1778086984836,
+    "provider": {
+      "id": "custom-1777701298596",
+      "name": "小8供应商",
+      "baseUrl": "https://api.ljh8888.xyz",
+      "key": "sk-mHdh7kDMy4is4fDtolNTAGdGyCOLz3hGT67jfp33lNjRzE7z"
+    },
+    "request": {
+      "endpoint": "/images/edits",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "prompt": "移除上面的数字, Make the aspect ratio 9:16, resolution 1440x2560",
+        "n": 1,
+        "size": "1440x2560",
+        "aspect_ratio": "9:16"
+      },
+      "referenceImages": [
+        "<data-image omitted length=4100158>"
+      ],
+      "useImageEdit": true,
+      "attempts": [
+        {
+          "label": "openai images edits",
+          "endpoint": "/images/edits",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "移除上面的数字, Make the aspect ratio 9:16, resolution 1440x2560",
+            "n": 1,
+            "size": "1440x2560",
+            "aspect_ratio": "9:16"
+          },
+          "referenceImages": [
+            "<data-image omitted length=4100158>"
+          ],
+          "useImageEdit": true
+        },
+        {
+          "label": "openai chat completions image",
+          "endpoint": "/chat/completions",
+          "payload": {
+            "model": "gpt-image-2",
+            "messages": [
+              {
+                "role": "user",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "移除上面的数字, Make the aspect ratio 9:16, resolution 1440x2560"
+                  },
+                  {
+                    "type": "image_url",
+                    "image_url": {
+                      "url": "<data-image omitted length=4100158>"
+                    }
+                  }
+                ]
+              }
+            ],
+            "modalities": [
+              "image",
+              "text"
+            ],
+            "n": 1,
+            "size": "1440x2560",
+            "aspect_ratio": "9:16"
+          },
+          "useImageEdit": false
+        }
+      ]
+    },
+    "error": "openai chat completions image 504: <html>\r\n<head><title>504 Gateway Time-out</title></head>\r\n<body>\r\n<center><h1>504 Gateway Time-out</h1></center>\r\n<hr><center>openresty</center>\r\n</body>\r\n</html>\r\n hint=Upstream gateway timed out before returning the generated image and did not include an upstream requestId, so the backend cannot automatically recover the result. If the provider dashboard shows a successful image, copy that image URL and attach it to this local job; otherwise use a direct/long-timeout API endpoint or ask the provider to increase the gateway/origin timeout."
+  },
+  {
+    "id": "item-9ck3oae",
+    "status": "completed",
+    "createdAt": 1779211761183,
+    "updatedAt": 1779212169422,
+    "provider": {
+      "id": "custom-1778002430773",
+      "name": "元启供应商",
+      "baseUrl": "https://mingyu.it.com",
+      "key": "sk-P8KQHIilFFW7wJ9KFyQwVKRcSO6AccEStETsUwxnFJ3xyB66"
+    },
+    "request": {
+      "endpoint": "/videos",
+      "method": "POST",
+      "payload": {
+        "model": "sora2",
+        "prompt": "委屈的哭起来\n\nRequired video settings: aspect ratio 9:16; exact duration 4s. Do not use any other duration.",
+        "size": "9x16",
+        "aspect_ratio": "9:16",
+        "duration": 4,
+        "seconds": "4",
+        "image": "<data-image omitted length=91791>"
+      },
+      "useImageEdit": false,
+      "mediaType": "video",
+      "attempts": [
+        {
+          "label": "sora videos",
+          "endpoint": "/videos",
+          "payload": {
+            "model": "sora2",
+            "prompt": "委屈的哭起来\n\nRequired video settings: aspect ratio 9:16; exact duration 4s. Do not use any other duration.",
+            "size": "9x16",
+            "aspect_ratio": "9:16",
+            "duration": 4,
+            "seconds": "4",
+            "image": "<data-image omitted length=91791>"
+          },
+          "useImageEdit": false,
+          "mediaType": "video"
+        },
+        {
+          "label": "video async generations",
+          "endpoint": "/async/generations",
+          "payload": {
+            "model": "sora2",
+            "prompt": "委屈的哭起来\n\nRequired video settings: aspect ratio 9:16; exact duration 4s. Do not use any other duration.",
+            "size": "9x16",
+            "aspect_ratio": "9:16",
+            "duration": 4,
+            "seconds": "4",
+            "image": "<data-image omitted length=91791>"
+          },
+          "useImageEdit": false,
+          "mediaType": "video"
+        },
+        {
+          "label": "lnapi video create",
+          "endpoint": "/video/create",
+          "payload": {
+            "model": "sora2",
+            "prompt": "委屈的哭起来\n\nRequired video settings: aspect ratio 9:16; exact duration 4s. Do not use any other duration.",
+            "size": "9x16",
+            "aspect_ratio": "9:16",
+            "duration": 4,
+            "seconds": "4",
+            "image": "<data-image omitted length=91791>"
+          },
+          "useImageEdit": false,
+          "mediaType": "video"
+        }
+      ]
+    },
+    "upstreamUrl": "http://107.148.176.80/generated/b7f4af420e544873a77883dc7bfae23d.mp4",
+    "resultUrl": "/uploads/item-9ck3oae.mp4"
+  },
+  {
+    "id": "item-ib3rkc6",
+    "status": "completed",
+    "createdAt": 1779292471939,
+    "updatedAt": 1779292517683,
+    "provider": {
+      "id": "custom-1778002430773",
+      "name": "元启供应商",
+      "baseUrl": "https://mingyu.it.com",
+      "key": "sk-P8KQHIilFFW7wJ9KFyQwVKRcSO6AccEStETsUwxnFJ3xyB66"
+    },
+    "request": {
+      "endpoint": "/chat/completions",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "messages": [
+          {
+            "role": "user",
+            "content": "两个美女, Make the aspect ratio 16:9, resolution 2560x1440"
+          }
+        ],
+        "size": "16x9",
+        "quality": "medium"
+      },
+      "useImageEdit": false,
+      "mediaType": "image",
+      "attempts": [
+        {
+          "label": "mingyu chat completions image",
+          "endpoint": "/chat/completions",
+          "payload": {
+            "model": "gpt-image-2",
+            "messages": [
+              {
+                "role": "user",
+                "content": "两个美女, Make the aspect ratio 16:9, resolution 2560x1440"
+              }
+            ],
+            "size": "16x9",
+            "quality": "medium"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        },
+        {
+          "label": "openai images edits",
+          "endpoint": "/images/edits",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "两个美女, Make the aspect ratio 16:9, resolution 2560x1440",
+            "n": 1,
+            "size": "16x9",
+            "quality": "medium"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        }
+      ]
+    },
+    "upstreamUrl": "http://107.148.176.80/generated/4a7534a907314adfab857eba39a6745b.png",
+    "resultUrl": "/uploads/item-ib3rkc6.png"
+  },
+  {
+    "id": "item-setracp",
+    "status": "completed",
+    "createdAt": 1779292615482,
+    "updatedAt": 1779292867756,
+    "provider": {
+      "id": "custom-1774425288413",
+      "name": "yunw云雾",
+      "baseUrl": "https://yunwu.ai",
+      "key": "sk-h2eJHe5s6VDhVOf3JqvzfXNAZghEI3fVkz9Sh5jDLW2lalnj"
+    },
+    "request": {
+      "endpoint": "/v1/video/create",
+      "method": "POST",
+      "payload": {
+        "model": "grok-video-3-10s",
+        "prompt": "笑起来跳舞",
+        "size": "1280x720",
+        "aspect_ratio": "16:9",
+        "duration": 10,
+        "images": [
+          "<data-image omitted length=165679>"
+        ]
+      },
+      "useImageEdit": false,
+      "mediaType": "video",
+      "attempts": [
+        {
+          "label": "yunwu grok video create",
+          "endpoint": "/v1/video/create",
+          "payload": {
+            "model": "grok-video-3-10s",
+            "prompt": "笑起来跳舞",
+            "size": "1280x720",
+            "aspect_ratio": "16:9",
+            "duration": 10,
+            "images": [
+              "<data-image omitted length=165679>"
+            ]
+          },
+          "useImageEdit": false,
+          "mediaType": "video"
+        }
+      ]
+    },
+    "upstreamUrl": "https://midjourney-plus.oss-us-west-1.aliyuncs.com/7534267a-e31f-4f5c-8841-dcb0a19e8450",
+    "resultUrl": "/uploads/item-setracp.mp4"
+  },
+  {
+    "id": "item-mb6q0xd",
+    "status": "completed",
+    "createdAt": 1779293114957,
+    "updatedAt": 1779293141003,
+    "provider": {
+      "id": "custom-1778641391075",
+      "name": "GeeKAI",
+      "baseUrl": "https://geeknow.ai",
+      "key": "sk-KVbLhWR9stvHpC4o6xEiVbeEG9c8v6mwXsIEbi5Qyn3Ujvfy"
+    },
+    "request": {
+      "endpoint": "/images/generations",
+      "method": "POST",
+      "payload": {
+        "model": "grok-4-2-image",
+        "prompt": "身材性感的亚洲女模特, Make the aspect ratio 9:16, resolution 720x1280",
+        "n": 1,
+        "aspect_ratio": "9:16",
+        "resolution": "1k"
+      },
+      "useImageEdit": false,
+      "mediaType": "image",
+      "attempts": [
+        {
+          "label": "openai images generations",
+          "endpoint": "/images/generations",
+          "payload": {
+            "model": "grok-4-2-image",
+            "prompt": "身材性感的亚洲女模特, Make the aspect ratio 9:16, resolution 720x1280",
+            "n": 1,
+            "aspect_ratio": "9:16",
+            "resolution": "1k"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        },
+        {
+          "label": "openai images edits",
+          "endpoint": "/images/edits",
+          "payload": {
+            "model": "grok-4-2-image",
+            "prompt": "身材性感的亚洲女模特, Make the aspect ratio 9:16, resolution 720x1280",
+            "n": 1,
+            "aspect_ratio": "9:16",
+            "resolution": "1k"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        },
+        {
+          "label": "openai responses image generation",
+          "endpoint": "/responses",
+          "payload": {
+            "model": "grok-4-2-image",
+            "input": [
+              {
+                "role": "user",
+                "content": [
+                  {
+                    "type": "input_text",
+                    "text": "身材性感的亚洲女模特, Make the aspect ratio 9:16, resolution 720x1280"
+                  }
+                ]
+              }
+            ],
+            "tools": [
+              {
+                "type": "image_generation",
+                "size": "720x1280"
+              }
+            ]
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        },
+        {
+          "label": "openai chat completions image",
+          "endpoint": "/chat/completions",
+          "payload": {
+            "model": "grok-4-2-image",
+            "messages": [
+              {
+                "role": "user",
+                "content": "身材性感的亚洲女模特, Make the aspect ratio 9:16, resolution 720x1280"
+              }
+            ],
+            "modalities": [
+              "image",
+              "text"
+            ],
+            "n": 1,
+            "size": "720x1280",
+            "aspect_ratio": "9:16"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        }
+      ]
+    },
+    "upstreamUrl": "https://geekus.oss-us-west-1.aliyuncs.com/a9789e05-ead6-4f17-98cc-2d306ce85570.jpg",
+    "resultUrl": "/uploads/item-mb6q0xd.jpg"
+  },
+  {
+    "id": "item-kf7phxd",
+    "status": "completed",
+    "createdAt": 1779293114969,
+    "updatedAt": 1779293142195,
+    "provider": {
+      "id": "custom-1778641391075",
+      "name": "GeeKAI",
+      "baseUrl": "https://geeknow.ai",
+      "key": "sk-KVbLhWR9stvHpC4o6xEiVbeEG9c8v6mwXsIEbi5Qyn3Ujvfy"
+    },
+    "request": {
+      "endpoint": "/images/generations",
+      "method": "POST",
+      "payload": {
+        "model": "grok-4-2-image",
+        "prompt": "身材性感的亚洲女模特, Make the aspect ratio 9:16, resolution 720x1280",
+        "n": 1,
+        "aspect_ratio": "9:16",
+        "resolution": "1k"
+      },
+      "useImageEdit": false,
+      "mediaType": "image",
+      "attempts": [
+        {
+          "label": "openai images generations",
+          "endpoint": "/images/generations",
+          "payload": {
+            "model": "grok-4-2-image",
+            "prompt": "身材性感的亚洲女模特, Make the aspect ratio 9:16, resolution 720x1280",
+            "n": 1,
+            "aspect_ratio": "9:16",
+            "resolution": "1k"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        },
+        {
+          "label": "openai images edits",
+          "endpoint": "/images/edits",
+          "payload": {
+            "model": "grok-4-2-image",
+            "prompt": "身材性感的亚洲女模特, Make the aspect ratio 9:16, resolution 720x1280",
+            "n": 1,
+            "aspect_ratio": "9:16",
+            "resolution": "1k"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        },
+        {
+          "label": "openai responses image generation",
+          "endpoint": "/responses",
+          "payload": {
+            "model": "grok-4-2-image",
+            "input": [
+              {
+                "role": "user",
+                "content": [
+                  {
+                    "type": "input_text",
+                    "text": "身材性感的亚洲女模特, Make the aspect ratio 9:16, resolution 720x1280"
+                  }
+                ]
+              }
+            ],
+            "tools": [
+              {
+                "type": "image_generation",
+                "size": "720x1280"
+              }
+            ]
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        },
+        {
+          "label": "openai chat completions image",
+          "endpoint": "/chat/completions",
+          "payload": {
+            "model": "grok-4-2-image",
+            "messages": [
+              {
+                "role": "user",
+                "content": "身材性感的亚洲女模特, Make the aspect ratio 9:16, resolution 720x1280"
+              }
+            ],
+            "modalities": [
+              "image",
+              "text"
+            ],
+            "n": 1,
+            "size": "720x1280",
+            "aspect_ratio": "9:16"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        }
+      ]
+    },
+    "upstreamUrl": "https://geekus.oss-us-west-1.aliyuncs.com/fdd7ec1d-d796-4530-9ed5-c51559ee2058.jpg",
+    "resultUrl": "/uploads/item-kf7phxd.jpg"
+  },
+  {
+    "id": "item-3a3p4oa",
+    "status": "completed",
+    "createdAt": 1779293968772,
+    "updatedAt": 1779294022891,
+    "provider": {
+      "id": "custom-1778002430773",
+      "name": "元启供应商",
+      "baseUrl": "https://mingyu.it.com",
+      "key": "sk-P8KQHIilFFW7wJ9KFyQwVKRcSO6AccEStETsUwxnFJ3xyB66"
+    },
+    "request": {
+      "endpoint": "/chat/completions",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "messages": [
+          {
+            "role": "user",
+            "content": "一艘巨大的宇宙飞船航行在浩瀚深空中，超广角全景构图，船体占据画面主体，庞大尺度带来强烈压迫感，背景布满星云、遥远星系与微弱星光，冷色调金属质感，低角度仰视视角，电影级科幻场景，史诗氛围，细节丰富，高清渲染, Make the aspect ratio 16:9, resolution 2560x1440"
+          }
+        ],
+        "size": "16x9",
+        "quality": "medium"
+      },
+      "useImageEdit": false,
+      "mediaType": "image",
+      "attempts": [
+        {
+          "label": "mingyu chat completions image",
+          "endpoint": "/chat/completions",
+          "payload": {
+            "model": "gpt-image-2",
+            "messages": [
+              {
+                "role": "user",
+                "content": "一艘巨大的宇宙飞船航行在浩瀚深空中，超广角全景构图，船体占据画面主体，庞大尺度带来强烈压迫感，背景布满星云、遥远星系与微弱星光，冷色调金属质感，低角度仰视视角，电影级科幻场景，史诗氛围，细节丰富，高清渲染, Make the aspect ratio 16:9, resolution 2560x1440"
+              }
+            ],
+            "size": "16x9",
+            "quality": "medium"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        },
+        {
+          "label": "openai images edits",
+          "endpoint": "/images/edits",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "一艘巨大的宇宙飞船航行在浩瀚深空中，超广角全景构图，船体占据画面主体，庞大尺度带来强烈压迫感，背景布满星云、遥远星系与微弱星光，冷色调金属质感，低角度仰视视角，电影级科幻场景，史诗氛围，细节丰富，高清渲染, Make the aspect ratio 16:9, resolution 2560x1440",
+            "n": 1,
+            "size": "16x9",
+            "quality": "medium"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        }
+      ]
+    },
+    "upstreamUrl": "http://107.148.176.82/generated/35fefdf1d3e0451dbdfa3dd682c8de92.png",
+    "resultUrl": "/uploads/item-3a3p4oa.png"
+  },
+  {
+    "id": "item-tuk0zj8",
+    "status": "completed",
+    "createdAt": 1779293968784,
+    "updatedAt": 1779294019254,
+    "provider": {
+      "id": "custom-1778002430773",
+      "name": "元启供应商",
+      "baseUrl": "https://mingyu.it.com",
+      "key": "sk-P8KQHIilFFW7wJ9KFyQwVKRcSO6AccEStETsUwxnFJ3xyB66"
+    },
+    "request": {
+      "endpoint": "/chat/completions",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "messages": [
+          {
+            "role": "user",
+            "content": "一艘巨大的宇宙飞船航行在浩瀚深空中，超广角全景构图，船体占据画面主体，庞大尺度带来强烈压迫感，背景布满星云、遥远星系与微弱星光，冷色调金属质感，低角度仰视视角，电影级科幻场景，史诗氛围，细节丰富，高清渲染, Make the aspect ratio 16:9, resolution 2560x1440"
+          }
+        ],
+        "size": "16x9",
+        "quality": "medium"
+      },
+      "useImageEdit": false,
+      "mediaType": "image",
+      "attempts": [
+        {
+          "label": "mingyu chat completions image",
+          "endpoint": "/chat/completions",
+          "payload": {
+            "model": "gpt-image-2",
+            "messages": [
+              {
+                "role": "user",
+                "content": "一艘巨大的宇宙飞船航行在浩瀚深空中，超广角全景构图，船体占据画面主体，庞大尺度带来强烈压迫感，背景布满星云、遥远星系与微弱星光，冷色调金属质感，低角度仰视视角，电影级科幻场景，史诗氛围，细节丰富，高清渲染, Make the aspect ratio 16:9, resolution 2560x1440"
+              }
+            ],
+            "size": "16x9",
+            "quality": "medium"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        },
+        {
+          "label": "openai images edits",
+          "endpoint": "/images/edits",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "一艘巨大的宇宙飞船航行在浩瀚深空中，超广角全景构图，船体占据画面主体，庞大尺度带来强烈压迫感，背景布满星云、遥远星系与微弱星光，冷色调金属质感，低角度仰视视角，电影级科幻场景，史诗氛围，细节丰富，高清渲染, Make the aspect ratio 16:9, resolution 2560x1440",
+            "n": 1,
+            "size": "16x9",
+            "quality": "medium"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        }
+      ]
+    },
+    "upstreamUrl": "http://107.148.176.82/generated/87841c4723574185a01f8895c14e5717.png",
+    "resultUrl": "/uploads/item-tuk0zj8.png"
+  },
+  {
+    "id": "item-byiaeqp",
+    "status": "completed",
+    "createdAt": 1779294624509,
+    "updatedAt": 1779294930874,
+    "provider": {
+      "id": "custom-1778002430773",
+      "name": "元启供应商",
+      "baseUrl": "https://mingyu.it.com",
+      "key": "sk-P8KQHIilFFW7wJ9KFyQwVKRcSO6AccEStETsUwxnFJ3xyB66"
+    },
+    "request": {
+      "endpoint": "/videos",
+      "method": "POST",
+      "payload": {
+        "model": "sora2",
+        "prompt": "一艘超巨型硬科幻宇宙母舰在浩瀚深空中缓慢航行，舰体如同移动的太空城市，庞大的黑色金属装甲覆盖全身，表面布满复杂机械结构、发光舷窗、蓝色能量灯和推进器光芒。镜头采用超广角全景，从飞船下方偏侧角度缓慢跟随并轻微后拉，突出母舰从画面左上方向右下方压迫式掠过的巨大尺度。飞船以沉重稳定的速度向前飞行，舰体表面的灯光逐渐闪烁，蓝色推进器喷出柔和光束，周围几艘小型护航舰伴随移动，形成强烈尺寸对比。背景中有璀璨星空、蓝色星云、旋涡星系、远处行星和轨道城市灯光，宇宙尘埃缓慢漂浮。整体氛围宏大、冰冷、神秘、压迫感强，电影级硬科幻质感，高细节金属纹理，真实光影，超高清，流畅运镜，史诗级太空舰队画面。\n\nRequired video settings: aspect ratio 16:9; exact duration 8s. Do not use any other duration.",
+        "size": "16x9",
+        "aspect_ratio": "16:9",
+        "duration": 8,
+        "seconds": "8",
+        "image": "<data-image omitted length=235339>"
+      },
+      "useImageEdit": false,
+      "mediaType": "video",
+      "attempts": [
+        {
+          "label": "sora videos",
+          "endpoint": "/videos",
+          "payload": {
+            "model": "sora2",
+            "prompt": "一艘超巨型硬科幻宇宙母舰在浩瀚深空中缓慢航行，舰体如同移动的太空城市，庞大的黑色金属装甲覆盖全身，表面布满复杂机械结构、发光舷窗、蓝色能量灯和推进器光芒。镜头采用超广角全景，从飞船下方偏侧角度缓慢跟随并轻微后拉，突出母舰从画面左上方向右下方压迫式掠过的巨大尺度。飞船以沉重稳定的速度向前飞行，舰体表面的灯光逐渐闪烁，蓝色推进器喷出柔和光束，周围几艘小型护航舰伴随移动，形成强烈尺寸对比。背景中有璀璨星空、蓝色星云、旋涡星系、远处行星和轨道城市灯光，宇宙尘埃缓慢漂浮。整体氛围宏大、冰冷、神秘、压迫感强，电影级硬科幻质感，高细节金属纹理，真实光影，超高清，流畅运镜，史诗级太空舰队画面。\n\nRequired video settings: aspect ratio 16:9; exact duration 8s. Do not use any other duration.",
+            "size": "16x9",
+            "aspect_ratio": "16:9",
+            "duration": 8,
+            "seconds": "8",
+            "image": "<data-image omitted length=235339>"
+          },
+          "useImageEdit": false,
+          "mediaType": "video"
+        },
+        {
+          "label": "video async generations",
+          "endpoint": "/async/generations",
+          "payload": {
+            "model": "sora2",
+            "prompt": "一艘超巨型硬科幻宇宙母舰在浩瀚深空中缓慢航行，舰体如同移动的太空城市，庞大的黑色金属装甲覆盖全身，表面布满复杂机械结构、发光舷窗、蓝色能量灯和推进器光芒。镜头采用超广角全景，从飞船下方偏侧角度缓慢跟随并轻微后拉，突出母舰从画面左上方向右下方压迫式掠过的巨大尺度。飞船以沉重稳定的速度向前飞行，舰体表面的灯光逐渐闪烁，蓝色推进器喷出柔和光束，周围几艘小型护航舰伴随移动，形成强烈尺寸对比。背景中有璀璨星空、蓝色星云、旋涡星系、远处行星和轨道城市灯光，宇宙尘埃缓慢漂浮。整体氛围宏大、冰冷、神秘、压迫感强，电影级硬科幻质感，高细节金属纹理，真实光影，超高清，流畅运镜，史诗级太空舰队画面。\n\nRequired video settings: aspect ratio 16:9; exact duration 8s. Do not use any other duration.",
+            "size": "16x9",
+            "aspect_ratio": "16:9",
+            "duration": 8,
+            "seconds": "8",
+            "image": "<data-image omitted length=235339>"
+          },
+          "useImageEdit": false,
+          "mediaType": "video"
+        },
+        {
+          "label": "lnapi video create",
+          "endpoint": "/video/create",
+          "payload": {
+            "model": "sora2",
+            "prompt": "一艘超巨型硬科幻宇宙母舰在浩瀚深空中缓慢航行，舰体如同移动的太空城市，庞大的黑色金属装甲覆盖全身，表面布满复杂机械结构、发光舷窗、蓝色能量灯和推进器光芒。镜头采用超广角全景，从飞船下方偏侧角度缓慢跟随并轻微后拉，突出母舰从画面左上方向右下方压迫式掠过的巨大尺度。飞船以沉重稳定的速度向前飞行，舰体表面的灯光逐渐闪烁，蓝色推进器喷出柔和光束，周围几艘小型护航舰伴随移动，形成强烈尺寸对比。背景中有璀璨星空、蓝色星云、旋涡星系、远处行星和轨道城市灯光，宇宙尘埃缓慢漂浮。整体氛围宏大、冰冷、神秘、压迫感强，电影级硬科幻质感，高细节金属纹理，真实光影，超高清，流畅运镜，史诗级太空舰队画面。\n\nRequired video settings: aspect ratio 16:9; exact duration 8s. Do not use any other duration.",
+            "size": "16x9",
+            "aspect_ratio": "16:9",
+            "duration": 8,
+            "seconds": "8",
+            "image": "<data-image omitted length=235339>"
+          },
+          "useImageEdit": false,
+          "mediaType": "video"
+        }
+      ]
+    },
+    "upstreamUrl": "http://107.148.176.80/generated/cb6efdea17ac484ca015ddfefd39b8ce.mp4",
+    "resultUrl": "/uploads/item-byiaeqp.mp4"
+  },
+  {
+    "id": "item-c43vgtf",
+    "status": "completed",
+    "createdAt": 1779429110048,
+    "updatedAt": 1779429628648,
+    "provider": {
+      "id": "custom-1778002430773",
+      "name": "元启供应商",
+      "baseUrl": "https://mingyu.it.com",
+      "key": "sk-P8KQHIilFFW7wJ9KFyQwVKRcSO6AccEStETsUwxnFJ3xyB66"
+    },
+    "request": {
+      "endpoint": "/videos",
+      "method": "POST",
+      "payload": {
+        "model": "sora2",
+        "prompt": "根据图片生成多个连贯镜头的视频\n\nRequired video settings: aspect ratio 16:9; exact duration 12s. Do not use any other duration.",
+        "size": "16x9",
+        "aspect_ratio": "16:9",
+        "duration": 12,
+        "seconds": "12",
+        "image": "<data-image omitted length=247383>"
+      },
+      "useImageEdit": false,
+      "mediaType": "video",
+      "attempts": [
+        {
+          "label": "sora videos",
+          "endpoint": "/videos",
+          "payload": {
+            "model": "sora2",
+            "prompt": "根据图片生成多个连贯镜头的视频\n\nRequired video settings: aspect ratio 16:9; exact duration 12s. Do not use any other duration.",
+            "size": "16x9",
+            "aspect_ratio": "16:9",
+            "duration": 12,
+            "seconds": "12",
+            "image": "<data-image omitted length=247383>"
+          },
+          "useImageEdit": false,
+          "mediaType": "video"
+        },
+        {
+          "label": "video async generations",
+          "endpoint": "/async/generations",
+          "payload": {
+            "model": "sora2",
+            "prompt": "根据图片生成多个连贯镜头的视频\n\nRequired video settings: aspect ratio 16:9; exact duration 12s. Do not use any other duration.",
+            "size": "16x9",
+            "aspect_ratio": "16:9",
+            "duration": 12,
+            "seconds": "12",
+            "image": "<data-image omitted length=247383>"
+          },
+          "useImageEdit": false,
+          "mediaType": "video"
+        },
+        {
+          "label": "lnapi video create",
+          "endpoint": "/video/create",
+          "payload": {
+            "model": "sora2",
+            "prompt": "根据图片生成多个连贯镜头的视频\n\nRequired video settings: aspect ratio 16:9; exact duration 12s. Do not use any other duration.",
+            "size": "16x9",
+            "aspect_ratio": "16:9",
+            "duration": 12,
+            "seconds": "12",
+            "image": "<data-image omitted length=247383>"
+          },
+          "useImageEdit": false,
+          "mediaType": "video"
+        }
+      ]
+    },
+    "upstreamUrl": "http://107.148.176.80/generated/ce15c67e683a4034ba7d5585003db158.mp4",
+    "resultUrl": "/uploads/item-c43vgtf.mp4"
+  },
+  {
+    "id": "item-kmejrr1",
+    "status": "completed",
+    "createdAt": 1779593345935,
+    "updatedAt": 1779593496956,
+    "provider": {
+      "id": "custom-1777997073377",
+      "name": "真香",
+      "baseUrl": "https://zxiang.dxmcs.xin",
+      "key": "sk-k0cOBqCOB72TQFXKTuwvBp1AbDlfCPvSL1mVzDH3hB9owq2E"
+    },
+    "request": {
+      "endpoint": "/images/generations",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "prompt": "### 九宫格分镜提示词\n\n**整体风格设定：**\n- 主题：拟人化橘猫进入深林向拟人化老虎求救，却被老虎欺骗并绑到树上\n- 画面风格：电影感童话暗黑风、拟人动物角色、细腻森林光影\n- 主角设定：拟人化橘猫，穿旧绿色小斗篷，背小布包，神情焦急但善良；拟人化老虎，高大威严，穿深色兽皮披风，眼神狡黠\n- 色彩氛围：深绿色森林、冷蓝阴影、局部暖黄色火光，悬疑压迫感逐渐增强\n- 画幅比例：1:1\n- 视觉关键词：拟人化动物、深林、求救、陷阱、绳索、树木、暗黑童话、电影感、精致构图\n\n---\n\n**第 1 格：开场 / 建立场景**\n- 画面描述：清晨雾气弥漫的深林入口，一条狭窄小路通向幽暗森林深处，树木高耸，枝叶遮天。拟人化橘猫站在路口，背着小布包，紧张地望向森林。\n- 镜头语言：远景，低角度平视，森林形成压迫感，橘猫位于画面下方偏中。\n- AI 绘图提示词：拟人化橘猫，橘色毛发，穿旧绿色小斗篷，背小布包，站在雾气弥漫的深林入口，高大树木遮天，狭窄小路通向黑暗森林，清晨冷光，暗黑童话风，电影感构图，细腻光影，1:1，高清细节\n\n---\n\n**第 2 格：人物登场 / 情绪铺垫**\n- 画面描述：橘猫快步走在森林小路上，怀里紧紧抱着一张皱巴巴的求救信，脸上写满焦急。周围灌木密集，远处传来不明动静。\n- 镜头语言：中景，跟拍视角，橘猫居中，前景用树枝遮挡制造窥视感。\n- AI 绘图提示词：拟人化橘猫在深林小路中快步前行，怀抱皱巴巴的求救信，表情焦急，绿色斗篷随动作摆动，周围浓密灌木和树枝遮挡前景，森林阴影深重，冷绿色调，悬疑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 3 格：行动开始 / 关系建立**\n- 画面描述：橘猫来到一棵巨大的古树前，树干上刻着虎爪标记。它抬头看向树后的山洞入口，似乎终于找到了老虎的住处。\n- 镜头语言：仰拍中远景，古树和洞口占据画面主体，橘猫显得渺小。\n- AI 绘图提示词：拟人化橘猫站在巨大古树前，抬头望向阴暗山洞入口，树干上有清晰虎爪标记，橘猫身形渺小，森林深处雾气环绕，仰拍视角，压迫感构图，暗黑童话风，电影感光影，1:1，高清细节\n\n---\n\n**第 4 格：情节推进 / 氛围增强**\n- 画面描述：拟人化老虎从山洞阴影中缓缓走出，高大强壮，披着深色兽皮披风，脸上带着若有若无的笑。橘猫向前一步，双手举起求救信。\n- 镜头语言：中景，老虎在画面上方占据主体，橘猫在下方形成体型对比。\n- AI 绘图提示词：拟人化老虎从阴暗山洞中走出，高大威严，橙黑条纹毛发，披深色兽皮披风，眼神狡黠，拟人化橘猫站在面前举起求救信，体型强烈对比，森林洞口，冷暗光线，戏剧化电影感，暗黑童话插画，1:1 构图\n\n---\n\n**第 5 格：核心画面 / 求救瞬间**\n- 画面描述：橘猫低头恳求老虎帮忙，双爪紧握求救信，神情真诚又害怕。老虎弯下腰，表面温和地听着，身后的尾巴却悄悄卷起一圈绳子。\n- 镜头语言：近景，双人对峙构图，橘猫在前景，老虎俯身形成阴影覆盖。\n- AI 绘图提示词：拟人化橘猫低头恳求，双爪紧握皱巴巴求救信，表情害怕又真诚，拟人化老虎弯腰假装温和倾听，老虎身后尾巴旁隐藏一圈粗麻绳，森林洞口阴影，紧张氛围，电影感近景，暗黑童话风，1:1，高清细节\n\n---\n\n**第 6 格：转折 / 欺骗暴露**\n- 画面描述：老虎忽然露出狡猾笑容，一只大爪子按住橘猫的肩膀，另一只手抖开粗麻绳。橘猫惊恐后退，求救信掉落在地。\n- 镜头语言：动态中景，斜角构图，增强失控和危险感。\n- AI 绘图提示词：拟人化老虎露出狡猾笑容，一只大爪子按住拟人化橘猫肩膀，另一只手抖开粗麻绳，橘猫惊恐后退，皱巴巴求救信掉落在泥地上，森林阴影加深，斜角构图，戏剧化光影，暗黑童话电影感，1:1 构图\n\n---\n\n**第 7 格：高潮 / 被绑到树上**\n- 画面描述：橘猫被粗麻绳绑在古树树干上，双手被束在身侧，斗篷凌乱，表情惊慌。老虎站在旁边拉紧绳结，背影高大，遮住大片光线。\n- 镜头语言：中近景，橘猫居中，老虎侧身占据画面一侧，树干形成垂直压迫构图。\n- AI 绘图提示词：拟人化橘猫被粗麻绳绑在巨大古树树干上，绿色斗篷凌乱，表情惊慌无助，拟人化老虎站在旁边拉紧绳结，高大身影遮住光线，森林深处，冷蓝阴影，暗黑童话风，电影感构图，细腻细节，1:1\n\n---\n\n**第 8 格：收束 / 情绪压低**\n- 画面描述：老虎转身离开，只留下橘猫被绑在树上。地上的求救信被风吹到树根旁，森林里雾气加重，远处乌鸦停在枯枝上。\n- 镜头语言：中远景，老虎背影渐远，橘猫被固定在画面中央，营造孤立感。\n- AI 绘图提示词：深林中，拟人化橘猫被绑在古树上，孤独无助，拟人化老虎背影渐渐走入阴影，地上皱巴巴求救信被风吹到树根旁，枯枝上停着乌鸦，雾气浓重，冷色调，压抑暗黑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 9 格：结尾定格 / 悬念记忆点**\n- 画面描述：夜幕降临，月光穿过树冠照在橘猫脸上。它低头看见脚边一只小萤火虫停在求救信上，眼神从恐惧变成一丝希望，暗示故事尚未结束。\n- 镜头语言：近景特写，橘猫脸部与发光萤火虫形成视觉焦点，浅景深。\n- AI 绘图提示词：夜晚深林，拟人化橘猫被粗麻绳绑在古树上，月光穿过树冠照亮脸庞，橘猫眼神从恐惧变成一丝希望，脚边皱巴巴求救信上停着发光萤火虫，冷蓝月光与微弱暖光对比，暗黑童话电影感，特写构图，1:1，高清细节, Make the aspect ratio 16:9, resolution 2560x1440",
+        "n": 1,
+        "size": "2560x1440",
+        "aspect_ratio": "16:9"
+      },
+      "useImageEdit": false,
+      "mediaType": "image",
+      "attempts": [
+        {
+          "label": "openai images generations",
+          "endpoint": "/images/generations",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "### 九宫格分镜提示词\n\n**整体风格设定：**\n- 主题：拟人化橘猫进入深林向拟人化老虎求救，却被老虎欺骗并绑到树上\n- 画面风格：电影感童话暗黑风、拟人动物角色、细腻森林光影\n- 主角设定：拟人化橘猫，穿旧绿色小斗篷，背小布包，神情焦急但善良；拟人化老虎，高大威严，穿深色兽皮披风，眼神狡黠\n- 色彩氛围：深绿色森林、冷蓝阴影、局部暖黄色火光，悬疑压迫感逐渐增强\n- 画幅比例：1:1\n- 视觉关键词：拟人化动物、深林、求救、陷阱、绳索、树木、暗黑童话、电影感、精致构图\n\n---\n\n**第 1 格：开场 / 建立场景**\n- 画面描述：清晨雾气弥漫的深林入口，一条狭窄小路通向幽暗森林深处，树木高耸，枝叶遮天。拟人化橘猫站在路口，背着小布包，紧张地望向森林。\n- 镜头语言：远景，低角度平视，森林形成压迫感，橘猫位于画面下方偏中。\n- AI 绘图提示词：拟人化橘猫，橘色毛发，穿旧绿色小斗篷，背小布包，站在雾气弥漫的深林入口，高大树木遮天，狭窄小路通向黑暗森林，清晨冷光，暗黑童话风，电影感构图，细腻光影，1:1，高清细节\n\n---\n\n**第 2 格：人物登场 / 情绪铺垫**\n- 画面描述：橘猫快步走在森林小路上，怀里紧紧抱着一张皱巴巴的求救信，脸上写满焦急。周围灌木密集，远处传来不明动静。\n- 镜头语言：中景，跟拍视角，橘猫居中，前景用树枝遮挡制造窥视感。\n- AI 绘图提示词：拟人化橘猫在深林小路中快步前行，怀抱皱巴巴的求救信，表情焦急，绿色斗篷随动作摆动，周围浓密灌木和树枝遮挡前景，森林阴影深重，冷绿色调，悬疑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 3 格：行动开始 / 关系建立**\n- 画面描述：橘猫来到一棵巨大的古树前，树干上刻着虎爪标记。它抬头看向树后的山洞入口，似乎终于找到了老虎的住处。\n- 镜头语言：仰拍中远景，古树和洞口占据画面主体，橘猫显得渺小。\n- AI 绘图提示词：拟人化橘猫站在巨大古树前，抬头望向阴暗山洞入口，树干上有清晰虎爪标记，橘猫身形渺小，森林深处雾气环绕，仰拍视角，压迫感构图，暗黑童话风，电影感光影，1:1，高清细节\n\n---\n\n**第 4 格：情节推进 / 氛围增强**\n- 画面描述：拟人化老虎从山洞阴影中缓缓走出，高大强壮，披着深色兽皮披风，脸上带着若有若无的笑。橘猫向前一步，双手举起求救信。\n- 镜头语言：中景，老虎在画面上方占据主体，橘猫在下方形成体型对比。\n- AI 绘图提示词：拟人化老虎从阴暗山洞中走出，高大威严，橙黑条纹毛发，披深色兽皮披风，眼神狡黠，拟人化橘猫站在面前举起求救信，体型强烈对比，森林洞口，冷暗光线，戏剧化电影感，暗黑童话插画，1:1 构图\n\n---\n\n**第 5 格：核心画面 / 求救瞬间**\n- 画面描述：橘猫低头恳求老虎帮忙，双爪紧握求救信，神情真诚又害怕。老虎弯下腰，表面温和地听着，身后的尾巴却悄悄卷起一圈绳子。\n- 镜头语言：近景，双人对峙构图，橘猫在前景，老虎俯身形成阴影覆盖。\n- AI 绘图提示词：拟人化橘猫低头恳求，双爪紧握皱巴巴求救信，表情害怕又真诚，拟人化老虎弯腰假装温和倾听，老虎身后尾巴旁隐藏一圈粗麻绳，森林洞口阴影，紧张氛围，电影感近景，暗黑童话风，1:1，高清细节\n\n---\n\n**第 6 格：转折 / 欺骗暴露**\n- 画面描述：老虎忽然露出狡猾笑容，一只大爪子按住橘猫的肩膀，另一只手抖开粗麻绳。橘猫惊恐后退，求救信掉落在地。\n- 镜头语言：动态中景，斜角构图，增强失控和危险感。\n- AI 绘图提示词：拟人化老虎露出狡猾笑容，一只大爪子按住拟人化橘猫肩膀，另一只手抖开粗麻绳，橘猫惊恐后退，皱巴巴求救信掉落在泥地上，森林阴影加深，斜角构图，戏剧化光影，暗黑童话电影感，1:1 构图\n\n---\n\n**第 7 格：高潮 / 被绑到树上**\n- 画面描述：橘猫被粗麻绳绑在古树树干上，双手被束在身侧，斗篷凌乱，表情惊慌。老虎站在旁边拉紧绳结，背影高大，遮住大片光线。\n- 镜头语言：中近景，橘猫居中，老虎侧身占据画面一侧，树干形成垂直压迫构图。\n- AI 绘图提示词：拟人化橘猫被粗麻绳绑在巨大古树树干上，绿色斗篷凌乱，表情惊慌无助，拟人化老虎站在旁边拉紧绳结，高大身影遮住光线，森林深处，冷蓝阴影，暗黑童话风，电影感构图，细腻细节，1:1\n\n---\n\n**第 8 格：收束 / 情绪压低**\n- 画面描述：老虎转身离开，只留下橘猫被绑在树上。地上的求救信被风吹到树根旁，森林里雾气加重，远处乌鸦停在枯枝上。\n- 镜头语言：中远景，老虎背影渐远，橘猫被固定在画面中央，营造孤立感。\n- AI 绘图提示词：深林中，拟人化橘猫被绑在古树上，孤独无助，拟人化老虎背影渐渐走入阴影，地上皱巴巴求救信被风吹到树根旁，枯枝上停着乌鸦，雾气浓重，冷色调，压抑暗黑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 9 格：结尾定格 / 悬念记忆点**\n- 画面描述：夜幕降临，月光穿过树冠照在橘猫脸上。它低头看见脚边一只小萤火虫停在求救信上，眼神从恐惧变成一丝希望，暗示故事尚未结束。\n- 镜头语言：近景特写，橘猫脸部与发光萤火虫形成视觉焦点，浅景深。\n- AI 绘图提示词：夜晚深林，拟人化橘猫被粗麻绳绑在古树上，月光穿过树冠照亮脸庞，橘猫眼神从恐惧变成一丝希望，脚边皱巴巴求救信上停着发光萤火虫，冷蓝月光与微弱暖光对比，暗黑童话电影感，特写构图，1:1，高清细节, Make the aspect ratio 16:9, resolution 2560x1440",
+            "n": 1,
+            "size": "2560x1440",
+            "aspect_ratio": "16:9"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        },
+        {
+          "label": "openai images edits",
+          "endpoint": "/images/edits",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "### 九宫格分镜提示词\n\n**整体风格设定：**\n- 主题：拟人化橘猫进入深林向拟人化老虎求救，却被老虎欺骗并绑到树上\n- 画面风格：电影感童话暗黑风、拟人动物角色、细腻森林光影\n- 主角设定：拟人化橘猫，穿旧绿色小斗篷，背小布包，神情焦急但善良；拟人化老虎，高大威严，穿深色兽皮披风，眼神狡黠\n- 色彩氛围：深绿色森林、冷蓝阴影、局部暖黄色火光，悬疑压迫感逐渐增强\n- 画幅比例：1:1\n- 视觉关键词：拟人化动物、深林、求救、陷阱、绳索、树木、暗黑童话、电影感、精致构图\n\n---\n\n**第 1 格：开场 / 建立场景**\n- 画面描述：清晨雾气弥漫的深林入口，一条狭窄小路通向幽暗森林深处，树木高耸，枝叶遮天。拟人化橘猫站在路口，背着小布包，紧张地望向森林。\n- 镜头语言：远景，低角度平视，森林形成压迫感，橘猫位于画面下方偏中。\n- AI 绘图提示词：拟人化橘猫，橘色毛发，穿旧绿色小斗篷，背小布包，站在雾气弥漫的深林入口，高大树木遮天，狭窄小路通向黑暗森林，清晨冷光，暗黑童话风，电影感构图，细腻光影，1:1，高清细节\n\n---\n\n**第 2 格：人物登场 / 情绪铺垫**\n- 画面描述：橘猫快步走在森林小路上，怀里紧紧抱着一张皱巴巴的求救信，脸上写满焦急。周围灌木密集，远处传来不明动静。\n- 镜头语言：中景，跟拍视角，橘猫居中，前景用树枝遮挡制造窥视感。\n- AI 绘图提示词：拟人化橘猫在深林小路中快步前行，怀抱皱巴巴的求救信，表情焦急，绿色斗篷随动作摆动，周围浓密灌木和树枝遮挡前景，森林阴影深重，冷绿色调，悬疑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 3 格：行动开始 / 关系建立**\n- 画面描述：橘猫来到一棵巨大的古树前，树干上刻着虎爪标记。它抬头看向树后的山洞入口，似乎终于找到了老虎的住处。\n- 镜头语言：仰拍中远景，古树和洞口占据画面主体，橘猫显得渺小。\n- AI 绘图提示词：拟人化橘猫站在巨大古树前，抬头望向阴暗山洞入口，树干上有清晰虎爪标记，橘猫身形渺小，森林深处雾气环绕，仰拍视角，压迫感构图，暗黑童话风，电影感光影，1:1，高清细节\n\n---\n\n**第 4 格：情节推进 / 氛围增强**\n- 画面描述：拟人化老虎从山洞阴影中缓缓走出，高大强壮，披着深色兽皮披风，脸上带着若有若无的笑。橘猫向前一步，双手举起求救信。\n- 镜头语言：中景，老虎在画面上方占据主体，橘猫在下方形成体型对比。\n- AI 绘图提示词：拟人化老虎从阴暗山洞中走出，高大威严，橙黑条纹毛发，披深色兽皮披风，眼神狡黠，拟人化橘猫站在面前举起求救信，体型强烈对比，森林洞口，冷暗光线，戏剧化电影感，暗黑童话插画，1:1 构图\n\n---\n\n**第 5 格：核心画面 / 求救瞬间**\n- 画面描述：橘猫低头恳求老虎帮忙，双爪紧握求救信，神情真诚又害怕。老虎弯下腰，表面温和地听着，身后的尾巴却悄悄卷起一圈绳子。\n- 镜头语言：近景，双人对峙构图，橘猫在前景，老虎俯身形成阴影覆盖。\n- AI 绘图提示词：拟人化橘猫低头恳求，双爪紧握皱巴巴求救信，表情害怕又真诚，拟人化老虎弯腰假装温和倾听，老虎身后尾巴旁隐藏一圈粗麻绳，森林洞口阴影，紧张氛围，电影感近景，暗黑童话风，1:1，高清细节\n\n---\n\n**第 6 格：转折 / 欺骗暴露**\n- 画面描述：老虎忽然露出狡猾笑容，一只大爪子按住橘猫的肩膀，另一只手抖开粗麻绳。橘猫惊恐后退，求救信掉落在地。\n- 镜头语言：动态中景，斜角构图，增强失控和危险感。\n- AI 绘图提示词：拟人化老虎露出狡猾笑容，一只大爪子按住拟人化橘猫肩膀，另一只手抖开粗麻绳，橘猫惊恐后退，皱巴巴求救信掉落在泥地上，森林阴影加深，斜角构图，戏剧化光影，暗黑童话电影感，1:1 构图\n\n---\n\n**第 7 格：高潮 / 被绑到树上**\n- 画面描述：橘猫被粗麻绳绑在古树树干上，双手被束在身侧，斗篷凌乱，表情惊慌。老虎站在旁边拉紧绳结，背影高大，遮住大片光线。\n- 镜头语言：中近景，橘猫居中，老虎侧身占据画面一侧，树干形成垂直压迫构图。\n- AI 绘图提示词：拟人化橘猫被粗麻绳绑在巨大古树树干上，绿色斗篷凌乱，表情惊慌无助，拟人化老虎站在旁边拉紧绳结，高大身影遮住光线，森林深处，冷蓝阴影，暗黑童话风，电影感构图，细腻细节，1:1\n\n---\n\n**第 8 格：收束 / 情绪压低**\n- 画面描述：老虎转身离开，只留下橘猫被绑在树上。地上的求救信被风吹到树根旁，森林里雾气加重，远处乌鸦停在枯枝上。\n- 镜头语言：中远景，老虎背影渐远，橘猫被固定在画面中央，营造孤立感。\n- AI 绘图提示词：深林中，拟人化橘猫被绑在古树上，孤独无助，拟人化老虎背影渐渐走入阴影，地上皱巴巴求救信被风吹到树根旁，枯枝上停着乌鸦，雾气浓重，冷色调，压抑暗黑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 9 格：结尾定格 / 悬念记忆点**\n- 画面描述：夜幕降临，月光穿过树冠照在橘猫脸上。它低头看见脚边一只小萤火虫停在求救信上，眼神从恐惧变成一丝希望，暗示故事尚未结束。\n- 镜头语言：近景特写，橘猫脸部与发光萤火虫形成视觉焦点，浅景深。\n- AI 绘图提示词：夜晚深林，拟人化橘猫被粗麻绳绑在古树上，月光穿过树冠照亮脸庞，橘猫眼神从恐惧变成一丝希望，脚边皱巴巴求救信上停着发光萤火虫，冷蓝月光与微弱暖光对比，暗黑童话电影感，特写构图，1:1，高清细节, Make the aspect ratio 16:9, resolution 2560x1440",
+            "n": 1,
+            "size": "2560x1440",
+            "aspect_ratio": "16:9"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        },
+        {
+          "label": "openai responses image generation",
+          "endpoint": "/responses",
+          "payload": {
+            "model": "gpt-image-2",
+            "input": [
+              {
+                "role": "user",
+                "content": [
+                  {
+                    "type": "input_text",
+                    "text": "### 九宫格分镜提示词\n\n**整体风格设定：**\n- 主题：拟人化橘猫进入深林向拟人化老虎求救，却被老虎欺骗并绑到树上\n- 画面风格：电影感童话暗黑风、拟人动物角色、细腻森林光影\n- 主角设定：拟人化橘猫，穿旧绿色小斗篷，背小布包，神情焦急但善良；拟人化老虎，高大威严，穿深色兽皮披风，眼神狡黠\n- 色彩氛围：深绿色森林、冷蓝阴影、局部暖黄色火光，悬疑压迫感逐渐增强\n- 画幅比例：1:1\n- 视觉关键词：拟人化动物、深林、求救、陷阱、绳索、树木、暗黑童话、电影感、精致构图\n\n---\n\n**第 1 格：开场 / 建立场景**\n- 画面描述：清晨雾气弥漫的深林入口，一条狭窄小路通向幽暗森林深处，树木高耸，枝叶遮天。拟人化橘猫站在路口，背着小布包，紧张地望向森林。\n- 镜头语言：远景，低角度平视，森林形成压迫感，橘猫位于画面下方偏中。\n- AI 绘图提示词：拟人化橘猫，橘色毛发，穿旧绿色小斗篷，背小布包，站在雾气弥漫的深林入口，高大树木遮天，狭窄小路通向黑暗森林，清晨冷光，暗黑童话风，电影感构图，细腻光影，1:1，高清细节\n\n---\n\n**第 2 格：人物登场 / 情绪铺垫**\n- 画面描述：橘猫快步走在森林小路上，怀里紧紧抱着一张皱巴巴的求救信，脸上写满焦急。周围灌木密集，远处传来不明动静。\n- 镜头语言：中景，跟拍视角，橘猫居中，前景用树枝遮挡制造窥视感。\n- AI 绘图提示词：拟人化橘猫在深林小路中快步前行，怀抱皱巴巴的求救信，表情焦急，绿色斗篷随动作摆动，周围浓密灌木和树枝遮挡前景，森林阴影深重，冷绿色调，悬疑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 3 格：行动开始 / 关系建立**\n- 画面描述：橘猫来到一棵巨大的古树前，树干上刻着虎爪标记。它抬头看向树后的山洞入口，似乎终于找到了老虎的住处。\n- 镜头语言：仰拍中远景，古树和洞口占据画面主体，橘猫显得渺小。\n- AI 绘图提示词：拟人化橘猫站在巨大古树前，抬头望向阴暗山洞入口，树干上有清晰虎爪标记，橘猫身形渺小，森林深处雾气环绕，仰拍视角，压迫感构图，暗黑童话风，电影感光影，1:1，高清细节\n\n---\n\n**第 4 格：情节推进 / 氛围增强**\n- 画面描述：拟人化老虎从山洞阴影中缓缓走出，高大强壮，披着深色兽皮披风，脸上带着若有若无的笑。橘猫向前一步，双手举起求救信。\n- 镜头语言：中景，老虎在画面上方占据主体，橘猫在下方形成体型对比。\n- AI 绘图提示词：拟人化老虎从阴暗山洞中走出，高大威严，橙黑条纹毛发，披深色兽皮披风，眼神狡黠，拟人化橘猫站在面前举起求救信，体型强烈对比，森林洞口，冷暗光线，戏剧化电影感，暗黑童话插画，1:1 构图\n\n---\n\n**第 5 格：核心画面 / 求救瞬间**\n- 画面描述：橘猫低头恳求老虎帮忙，双爪紧握求救信，神情真诚又害怕。老虎弯下腰，表面温和地听着，身后的尾巴却悄悄卷起一圈绳子。\n- 镜头语言：近景，双人对峙构图，橘猫在前景，老虎俯身形成阴影覆盖。\n- AI 绘图提示词：拟人化橘猫低头恳求，双爪紧握皱巴巴求救信，表情害怕又真诚，拟人化老虎弯腰假装温和倾听，老虎身后尾巴旁隐藏一圈粗麻绳，森林洞口阴影，紧张氛围，电影感近景，暗黑童话风，1:1，高清细节\n\n---\n\n**第 6 格：转折 / 欺骗暴露**\n- 画面描述：老虎忽然露出狡猾笑容，一只大爪子按住橘猫的肩膀，另一只手抖开粗麻绳。橘猫惊恐后退，求救信掉落在地。\n- 镜头语言：动态中景，斜角构图，增强失控和危险感。\n- AI 绘图提示词：拟人化老虎露出狡猾笑容，一只大爪子按住拟人化橘猫肩膀，另一只手抖开粗麻绳，橘猫惊恐后退，皱巴巴求救信掉落在泥地上，森林阴影加深，斜角构图，戏剧化光影，暗黑童话电影感，1:1 构图\n\n---\n\n**第 7 格：高潮 / 被绑到树上**\n- 画面描述：橘猫被粗麻绳绑在古树树干上，双手被束在身侧，斗篷凌乱，表情惊慌。老虎站在旁边拉紧绳结，背影高大，遮住大片光线。\n- 镜头语言：中近景，橘猫居中，老虎侧身占据画面一侧，树干形成垂直压迫构图。\n- AI 绘图提示词：拟人化橘猫被粗麻绳绑在巨大古树树干上，绿色斗篷凌乱，表情惊慌无助，拟人化老虎站在旁边拉紧绳结，高大身影遮住光线，森林深处，冷蓝阴影，暗黑童话风，电影感构图，细腻细节，1:1\n\n---\n\n**第 8 格：收束 / 情绪压低**\n- 画面描述：老虎转身离开，只留下橘猫被绑在树上。地上的求救信被风吹到树根旁，森林里雾气加重，远处乌鸦停在枯枝上。\n- 镜头语言：中远景，老虎背影渐远，橘猫被固定在画面中央，营造孤立感。\n- AI 绘图提示词：深林中，拟人化橘猫被绑在古树上，孤独无助，拟人化老虎背影渐渐走入阴影，地上皱巴巴求救信被风吹到树根旁，枯枝上停着乌鸦，雾气浓重，冷色调，压抑暗黑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 9 格：结尾定格 / 悬念记忆点**\n- 画面描述：夜幕降临，月光穿过树冠照在橘猫脸上。它低头看见脚边一只小萤火虫停在求救信上，眼神从恐惧变成一丝希望，暗示故事尚未结束。\n- 镜头语言：近景特写，橘猫脸部与发光萤火虫形成视觉焦点，浅景深。\n- AI 绘图提示词：夜晚深林，拟人化橘猫被粗麻绳绑在古树上，月光穿过树冠照亮脸庞，橘猫眼神从恐惧变成一丝希望，脚边皱巴巴求救信上停着发光萤火虫，冷蓝月光与微弱暖光对比，暗黑童话电影感，特写构图，1:1，高清细节, Make the aspect ratio 16:9, resolution 2560x1440"
+                  }
+                ]
+              }
+            ],
+            "tools": [
+              {
+                "type": "image_generation",
+                "size": "2560x1440"
+              }
+            ]
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        },
+        {
+          "label": "openai chat completions image",
+          "endpoint": "/chat/completions",
+          "payload": {
+            "model": "gpt-image-2",
+            "messages": [
+              {
+                "role": "user",
+                "content": "### 九宫格分镜提示词\n\n**整体风格设定：**\n- 主题：拟人化橘猫进入深林向拟人化老虎求救，却被老虎欺骗并绑到树上\n- 画面风格：电影感童话暗黑风、拟人动物角色、细腻森林光影\n- 主角设定：拟人化橘猫，穿旧绿色小斗篷，背小布包，神情焦急但善良；拟人化老虎，高大威严，穿深色兽皮披风，眼神狡黠\n- 色彩氛围：深绿色森林、冷蓝阴影、局部暖黄色火光，悬疑压迫感逐渐增强\n- 画幅比例：1:1\n- 视觉关键词：拟人化动物、深林、求救、陷阱、绳索、树木、暗黑童话、电影感、精致构图\n\n---\n\n**第 1 格：开场 / 建立场景**\n- 画面描述：清晨雾气弥漫的深林入口，一条狭窄小路通向幽暗森林深处，树木高耸，枝叶遮天。拟人化橘猫站在路口，背着小布包，紧张地望向森林。\n- 镜头语言：远景，低角度平视，森林形成压迫感，橘猫位于画面下方偏中。\n- AI 绘图提示词：拟人化橘猫，橘色毛发，穿旧绿色小斗篷，背小布包，站在雾气弥漫的深林入口，高大树木遮天，狭窄小路通向黑暗森林，清晨冷光，暗黑童话风，电影感构图，细腻光影，1:1，高清细节\n\n---\n\n**第 2 格：人物登场 / 情绪铺垫**\n- 画面描述：橘猫快步走在森林小路上，怀里紧紧抱着一张皱巴巴的求救信，脸上写满焦急。周围灌木密集，远处传来不明动静。\n- 镜头语言：中景，跟拍视角，橘猫居中，前景用树枝遮挡制造窥视感。\n- AI 绘图提示词：拟人化橘猫在深林小路中快步前行，怀抱皱巴巴的求救信，表情焦急，绿色斗篷随动作摆动，周围浓密灌木和树枝遮挡前景，森林阴影深重，冷绿色调，悬疑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 3 格：行动开始 / 关系建立**\n- 画面描述：橘猫来到一棵巨大的古树前，树干上刻着虎爪标记。它抬头看向树后的山洞入口，似乎终于找到了老虎的住处。\n- 镜头语言：仰拍中远景，古树和洞口占据画面主体，橘猫显得渺小。\n- AI 绘图提示词：拟人化橘猫站在巨大古树前，抬头望向阴暗山洞入口，树干上有清晰虎爪标记，橘猫身形渺小，森林深处雾气环绕，仰拍视角，压迫感构图，暗黑童话风，电影感光影，1:1，高清细节\n\n---\n\n**第 4 格：情节推进 / 氛围增强**\n- 画面描述：拟人化老虎从山洞阴影中缓缓走出，高大强壮，披着深色兽皮披风，脸上带着若有若无的笑。橘猫向前一步，双手举起求救信。\n- 镜头语言：中景，老虎在画面上方占据主体，橘猫在下方形成体型对比。\n- AI 绘图提示词：拟人化老虎从阴暗山洞中走出，高大威严，橙黑条纹毛发，披深色兽皮披风，眼神狡黠，拟人化橘猫站在面前举起求救信，体型强烈对比，森林洞口，冷暗光线，戏剧化电影感，暗黑童话插画，1:1 构图\n\n---\n\n**第 5 格：核心画面 / 求救瞬间**\n- 画面描述：橘猫低头恳求老虎帮忙，双爪紧握求救信，神情真诚又害怕。老虎弯下腰，表面温和地听着，身后的尾巴却悄悄卷起一圈绳子。\n- 镜头语言：近景，双人对峙构图，橘猫在前景，老虎俯身形成阴影覆盖。\n- AI 绘图提示词：拟人化橘猫低头恳求，双爪紧握皱巴巴求救信，表情害怕又真诚，拟人化老虎弯腰假装温和倾听，老虎身后尾巴旁隐藏一圈粗麻绳，森林洞口阴影，紧张氛围，电影感近景，暗黑童话风，1:1，高清细节\n\n---\n\n**第 6 格：转折 / 欺骗暴露**\n- 画面描述：老虎忽然露出狡猾笑容，一只大爪子按住橘猫的肩膀，另一只手抖开粗麻绳。橘猫惊恐后退，求救信掉落在地。\n- 镜头语言：动态中景，斜角构图，增强失控和危险感。\n- AI 绘图提示词：拟人化老虎露出狡猾笑容，一只大爪子按住拟人化橘猫肩膀，另一只手抖开粗麻绳，橘猫惊恐后退，皱巴巴求救信掉落在泥地上，森林阴影加深，斜角构图，戏剧化光影，暗黑童话电影感，1:1 构图\n\n---\n\n**第 7 格：高潮 / 被绑到树上**\n- 画面描述：橘猫被粗麻绳绑在古树树干上，双手被束在身侧，斗篷凌乱，表情惊慌。老虎站在旁边拉紧绳结，背影高大，遮住大片光线。\n- 镜头语言：中近景，橘猫居中，老虎侧身占据画面一侧，树干形成垂直压迫构图。\n- AI 绘图提示词：拟人化橘猫被粗麻绳绑在巨大古树树干上，绿色斗篷凌乱，表情惊慌无助，拟人化老虎站在旁边拉紧绳结，高大身影遮住光线，森林深处，冷蓝阴影，暗黑童话风，电影感构图，细腻细节，1:1\n\n---\n\n**第 8 格：收束 / 情绪压低**\n- 画面描述：老虎转身离开，只留下橘猫被绑在树上。地上的求救信被风吹到树根旁，森林里雾气加重，远处乌鸦停在枯枝上。\n- 镜头语言：中远景，老虎背影渐远，橘猫被固定在画面中央，营造孤立感。\n- AI 绘图提示词：深林中，拟人化橘猫被绑在古树上，孤独无助，拟人化老虎背影渐渐走入阴影，地上皱巴巴求救信被风吹到树根旁，枯枝上停着乌鸦，雾气浓重，冷色调，压抑暗黑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 9 格：结尾定格 / 悬念记忆点**\n- 画面描述：夜幕降临，月光穿过树冠照在橘猫脸上。它低头看见脚边一只小萤火虫停在求救信上，眼神从恐惧变成一丝希望，暗示故事尚未结束。\n- 镜头语言：近景特写，橘猫脸部与发光萤火虫形成视觉焦点，浅景深。\n- AI 绘图提示词：夜晚深林，拟人化橘猫被粗麻绳绑在古树上，月光穿过树冠照亮脸庞，橘猫眼神从恐惧变成一丝希望，脚边皱巴巴求救信上停着发光萤火虫，冷蓝月光与微弱暖光对比，暗黑童话电影感，特写构图，1:1，高清细节, Make the aspect ratio 16:9, resolution 2560x1440"
+              }
+            ],
+            "modalities": [
+              "image",
+              "text"
+            ],
+            "n": 1,
+            "size": "2560x1440",
+            "aspect_ratio": "16:9"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        }
+      ]
+    },
+    "upstreamUrl": "<data-image omitted length=8128530>",
+    "resultUrl": "/uploads/item-kmejrr1.png"
+  },
+  {
+    "id": "item-ntlwhx1",
+    "status": "completed",
+    "createdAt": 1779593346007,
+    "updatedAt": 1779593487828,
+    "provider": {
+      "id": "custom-1777997073377",
+      "name": "真香",
+      "baseUrl": "https://zxiang.dxmcs.xin",
+      "key": "sk-vVMWW2XKNJ7tLUh8sq8GbyUdDMyK9JNNAIpPg92S8GHwRbZI"
+    },
+    "request": {
+      "endpoint": "/images/generations",
+      "method": "POST",
+      "payload": {
+        "model": "gpt-image-2",
+        "prompt": "### 九宫格分镜提示词\n\n**整体风格设定：**\n- 主题：拟人化橘猫进入深林向拟人化老虎求救，却被老虎欺骗并绑到树上\n- 画面风格：电影感童话暗黑风、拟人动物角色、细腻森林光影\n- 主角设定：拟人化橘猫，穿旧绿色小斗篷，背小布包，神情焦急但善良；拟人化老虎，高大威严，穿深色兽皮披风，眼神狡黠\n- 色彩氛围：深绿色森林、冷蓝阴影、局部暖黄色火光，悬疑压迫感逐渐增强\n- 画幅比例：1:1\n- 视觉关键词：拟人化动物、深林、求救、陷阱、绳索、树木、暗黑童话、电影感、精致构图\n\n---\n\n**第 1 格：开场 / 建立场景**\n- 画面描述：清晨雾气弥漫的深林入口，一条狭窄小路通向幽暗森林深处，树木高耸，枝叶遮天。拟人化橘猫站在路口，背着小布包，紧张地望向森林。\n- 镜头语言：远景，低角度平视，森林形成压迫感，橘猫位于画面下方偏中。\n- AI 绘图提示词：拟人化橘猫，橘色毛发，穿旧绿色小斗篷，背小布包，站在雾气弥漫的深林入口，高大树木遮天，狭窄小路通向黑暗森林，清晨冷光，暗黑童话风，电影感构图，细腻光影，1:1，高清细节\n\n---\n\n**第 2 格：人物登场 / 情绪铺垫**\n- 画面描述：橘猫快步走在森林小路上，怀里紧紧抱着一张皱巴巴的求救信，脸上写满焦急。周围灌木密集，远处传来不明动静。\n- 镜头语言：中景，跟拍视角，橘猫居中，前景用树枝遮挡制造窥视感。\n- AI 绘图提示词：拟人化橘猫在深林小路中快步前行，怀抱皱巴巴的求救信，表情焦急，绿色斗篷随动作摆动，周围浓密灌木和树枝遮挡前景，森林阴影深重，冷绿色调，悬疑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 3 格：行动开始 / 关系建立**\n- 画面描述：橘猫来到一棵巨大的古树前，树干上刻着虎爪标记。它抬头看向树后的山洞入口，似乎终于找到了老虎的住处。\n- 镜头语言：仰拍中远景，古树和洞口占据画面主体，橘猫显得渺小。\n- AI 绘图提示词：拟人化橘猫站在巨大古树前，抬头望向阴暗山洞入口，树干上有清晰虎爪标记，橘猫身形渺小，森林深处雾气环绕，仰拍视角，压迫感构图，暗黑童话风，电影感光影，1:1，高清细节\n\n---\n\n**第 4 格：情节推进 / 氛围增强**\n- 画面描述：拟人化老虎从山洞阴影中缓缓走出，高大强壮，披着深色兽皮披风，脸上带着若有若无的笑。橘猫向前一步，双手举起求救信。\n- 镜头语言：中景，老虎在画面上方占据主体，橘猫在下方形成体型对比。\n- AI 绘图提示词：拟人化老虎从阴暗山洞中走出，高大威严，橙黑条纹毛发，披深色兽皮披风，眼神狡黠，拟人化橘猫站在面前举起求救信，体型强烈对比，森林洞口，冷暗光线，戏剧化电影感，暗黑童话插画，1:1 构图\n\n---\n\n**第 5 格：核心画面 / 求救瞬间**\n- 画面描述：橘猫低头恳求老虎帮忙，双爪紧握求救信，神情真诚又害怕。老虎弯下腰，表面温和地听着，身后的尾巴却悄悄卷起一圈绳子。\n- 镜头语言：近景，双人对峙构图，橘猫在前景，老虎俯身形成阴影覆盖。\n- AI 绘图提示词：拟人化橘猫低头恳求，双爪紧握皱巴巴求救信，表情害怕又真诚，拟人化老虎弯腰假装温和倾听，老虎身后尾巴旁隐藏一圈粗麻绳，森林洞口阴影，紧张氛围，电影感近景，暗黑童话风，1:1，高清细节\n\n---\n\n**第 6 格：转折 / 欺骗暴露**\n- 画面描述：老虎忽然露出狡猾笑容，一只大爪子按住橘猫的肩膀，另一只手抖开粗麻绳。橘猫惊恐后退，求救信掉落在地。\n- 镜头语言：动态中景，斜角构图，增强失控和危险感。\n- AI 绘图提示词：拟人化老虎露出狡猾笑容，一只大爪子按住拟人化橘猫肩膀，另一只手抖开粗麻绳，橘猫惊恐后退，皱巴巴求救信掉落在泥地上，森林阴影加深，斜角构图，戏剧化光影，暗黑童话电影感，1:1 构图\n\n---\n\n**第 7 格：高潮 / 被绑到树上**\n- 画面描述：橘猫被粗麻绳绑在古树树干上，双手被束在身侧，斗篷凌乱，表情惊慌。老虎站在旁边拉紧绳结，背影高大，遮住大片光线。\n- 镜头语言：中近景，橘猫居中，老虎侧身占据画面一侧，树干形成垂直压迫构图。\n- AI 绘图提示词：拟人化橘猫被粗麻绳绑在巨大古树树干上，绿色斗篷凌乱，表情惊慌无助，拟人化老虎站在旁边拉紧绳结，高大身影遮住光线，森林深处，冷蓝阴影，暗黑童话风，电影感构图，细腻细节，1:1\n\n---\n\n**第 8 格：收束 / 情绪压低**\n- 画面描述：老虎转身离开，只留下橘猫被绑在树上。地上的求救信被风吹到树根旁，森林里雾气加重，远处乌鸦停在枯枝上。\n- 镜头语言：中远景，老虎背影渐远，橘猫被固定在画面中央，营造孤立感。\n- AI 绘图提示词：深林中，拟人化橘猫被绑在古树上，孤独无助，拟人化老虎背影渐渐走入阴影，地上皱巴巴求救信被风吹到树根旁，枯枝上停着乌鸦，雾气浓重，冷色调，压抑暗黑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 9 格：结尾定格 / 悬念记忆点**\n- 画面描述：夜幕降临，月光穿过树冠照在橘猫脸上。它低头看见脚边一只小萤火虫停在求救信上，眼神从恐惧变成一丝希望，暗示故事尚未结束。\n- 镜头语言：近景特写，橘猫脸部与发光萤火虫形成视觉焦点，浅景深。\n- AI 绘图提示词：夜晚深林，拟人化橘猫被粗麻绳绑在古树上，月光穿过树冠照亮脸庞，橘猫眼神从恐惧变成一丝希望，脚边皱巴巴求救信上停着发光萤火虫，冷蓝月光与微弱暖光对比，暗黑童话电影感，特写构图，1:1，高清细节, Make the aspect ratio 16:9, resolution 2560x1440",
+        "n": 1,
+        "size": "2560x1440",
+        "aspect_ratio": "16:9"
+      },
+      "useImageEdit": false,
+      "mediaType": "image",
+      "attempts": [
+        {
+          "label": "openai images generations",
+          "endpoint": "/images/generations",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "### 九宫格分镜提示词\n\n**整体风格设定：**\n- 主题：拟人化橘猫进入深林向拟人化老虎求救，却被老虎欺骗并绑到树上\n- 画面风格：电影感童话暗黑风、拟人动物角色、细腻森林光影\n- 主角设定：拟人化橘猫，穿旧绿色小斗篷，背小布包，神情焦急但善良；拟人化老虎，高大威严，穿深色兽皮披风，眼神狡黠\n- 色彩氛围：深绿色森林、冷蓝阴影、局部暖黄色火光，悬疑压迫感逐渐增强\n- 画幅比例：1:1\n- 视觉关键词：拟人化动物、深林、求救、陷阱、绳索、树木、暗黑童话、电影感、精致构图\n\n---\n\n**第 1 格：开场 / 建立场景**\n- 画面描述：清晨雾气弥漫的深林入口，一条狭窄小路通向幽暗森林深处，树木高耸，枝叶遮天。拟人化橘猫站在路口，背着小布包，紧张地望向森林。\n- 镜头语言：远景，低角度平视，森林形成压迫感，橘猫位于画面下方偏中。\n- AI 绘图提示词：拟人化橘猫，橘色毛发，穿旧绿色小斗篷，背小布包，站在雾气弥漫的深林入口，高大树木遮天，狭窄小路通向黑暗森林，清晨冷光，暗黑童话风，电影感构图，细腻光影，1:1，高清细节\n\n---\n\n**第 2 格：人物登场 / 情绪铺垫**\n- 画面描述：橘猫快步走在森林小路上，怀里紧紧抱着一张皱巴巴的求救信，脸上写满焦急。周围灌木密集，远处传来不明动静。\n- 镜头语言：中景，跟拍视角，橘猫居中，前景用树枝遮挡制造窥视感。\n- AI 绘图提示词：拟人化橘猫在深林小路中快步前行，怀抱皱巴巴的求救信，表情焦急，绿色斗篷随动作摆动，周围浓密灌木和树枝遮挡前景，森林阴影深重，冷绿色调，悬疑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 3 格：行动开始 / 关系建立**\n- 画面描述：橘猫来到一棵巨大的古树前，树干上刻着虎爪标记。它抬头看向树后的山洞入口，似乎终于找到了老虎的住处。\n- 镜头语言：仰拍中远景，古树和洞口占据画面主体，橘猫显得渺小。\n- AI 绘图提示词：拟人化橘猫站在巨大古树前，抬头望向阴暗山洞入口，树干上有清晰虎爪标记，橘猫身形渺小，森林深处雾气环绕，仰拍视角，压迫感构图，暗黑童话风，电影感光影，1:1，高清细节\n\n---\n\n**第 4 格：情节推进 / 氛围增强**\n- 画面描述：拟人化老虎从山洞阴影中缓缓走出，高大强壮，披着深色兽皮披风，脸上带着若有若无的笑。橘猫向前一步，双手举起求救信。\n- 镜头语言：中景，老虎在画面上方占据主体，橘猫在下方形成体型对比。\n- AI 绘图提示词：拟人化老虎从阴暗山洞中走出，高大威严，橙黑条纹毛发，披深色兽皮披风，眼神狡黠，拟人化橘猫站在面前举起求救信，体型强烈对比，森林洞口，冷暗光线，戏剧化电影感，暗黑童话插画，1:1 构图\n\n---\n\n**第 5 格：核心画面 / 求救瞬间**\n- 画面描述：橘猫低头恳求老虎帮忙，双爪紧握求救信，神情真诚又害怕。老虎弯下腰，表面温和地听着，身后的尾巴却悄悄卷起一圈绳子。\n- 镜头语言：近景，双人对峙构图，橘猫在前景，老虎俯身形成阴影覆盖。\n- AI 绘图提示词：拟人化橘猫低头恳求，双爪紧握皱巴巴求救信，表情害怕又真诚，拟人化老虎弯腰假装温和倾听，老虎身后尾巴旁隐藏一圈粗麻绳，森林洞口阴影，紧张氛围，电影感近景，暗黑童话风，1:1，高清细节\n\n---\n\n**第 6 格：转折 / 欺骗暴露**\n- 画面描述：老虎忽然露出狡猾笑容，一只大爪子按住橘猫的肩膀，另一只手抖开粗麻绳。橘猫惊恐后退，求救信掉落在地。\n- 镜头语言：动态中景，斜角构图，增强失控和危险感。\n- AI 绘图提示词：拟人化老虎露出狡猾笑容，一只大爪子按住拟人化橘猫肩膀，另一只手抖开粗麻绳，橘猫惊恐后退，皱巴巴求救信掉落在泥地上，森林阴影加深，斜角构图，戏剧化光影，暗黑童话电影感，1:1 构图\n\n---\n\n**第 7 格：高潮 / 被绑到树上**\n- 画面描述：橘猫被粗麻绳绑在古树树干上，双手被束在身侧，斗篷凌乱，表情惊慌。老虎站在旁边拉紧绳结，背影高大，遮住大片光线。\n- 镜头语言：中近景，橘猫居中，老虎侧身占据画面一侧，树干形成垂直压迫构图。\n- AI 绘图提示词：拟人化橘猫被粗麻绳绑在巨大古树树干上，绿色斗篷凌乱，表情惊慌无助，拟人化老虎站在旁边拉紧绳结，高大身影遮住光线，森林深处，冷蓝阴影，暗黑童话风，电影感构图，细腻细节，1:1\n\n---\n\n**第 8 格：收束 / 情绪压低**\n- 画面描述：老虎转身离开，只留下橘猫被绑在树上。地上的求救信被风吹到树根旁，森林里雾气加重，远处乌鸦停在枯枝上。\n- 镜头语言：中远景，老虎背影渐远，橘猫被固定在画面中央，营造孤立感。\n- AI 绘图提示词：深林中，拟人化橘猫被绑在古树上，孤独无助，拟人化老虎背影渐渐走入阴影，地上皱巴巴求救信被风吹到树根旁，枯枝上停着乌鸦，雾气浓重，冷色调，压抑暗黑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 9 格：结尾定格 / 悬念记忆点**\n- 画面描述：夜幕降临，月光穿过树冠照在橘猫脸上。它低头看见脚边一只小萤火虫停在求救信上，眼神从恐惧变成一丝希望，暗示故事尚未结束。\n- 镜头语言：近景特写，橘猫脸部与发光萤火虫形成视觉焦点，浅景深。\n- AI 绘图提示词：夜晚深林，拟人化橘猫被粗麻绳绑在古树上，月光穿过树冠照亮脸庞，橘猫眼神从恐惧变成一丝希望，脚边皱巴巴求救信上停着发光萤火虫，冷蓝月光与微弱暖光对比，暗黑童话电影感，特写构图，1:1，高清细节, Make the aspect ratio 16:9, resolution 2560x1440",
+            "n": 1,
+            "size": "2560x1440",
+            "aspect_ratio": "16:9"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        },
+        {
+          "label": "openai images edits",
+          "endpoint": "/images/edits",
+          "payload": {
+            "model": "gpt-image-2",
+            "prompt": "### 九宫格分镜提示词\n\n**整体风格设定：**\n- 主题：拟人化橘猫进入深林向拟人化老虎求救，却被老虎欺骗并绑到树上\n- 画面风格：电影感童话暗黑风、拟人动物角色、细腻森林光影\n- 主角设定：拟人化橘猫，穿旧绿色小斗篷，背小布包，神情焦急但善良；拟人化老虎，高大威严，穿深色兽皮披风，眼神狡黠\n- 色彩氛围：深绿色森林、冷蓝阴影、局部暖黄色火光，悬疑压迫感逐渐增强\n- 画幅比例：1:1\n- 视觉关键词：拟人化动物、深林、求救、陷阱、绳索、树木、暗黑童话、电影感、精致构图\n\n---\n\n**第 1 格：开场 / 建立场景**\n- 画面描述：清晨雾气弥漫的深林入口，一条狭窄小路通向幽暗森林深处，树木高耸，枝叶遮天。拟人化橘猫站在路口，背着小布包，紧张地望向森林。\n- 镜头语言：远景，低角度平视，森林形成压迫感，橘猫位于画面下方偏中。\n- AI 绘图提示词：拟人化橘猫，橘色毛发，穿旧绿色小斗篷，背小布包，站在雾气弥漫的深林入口，高大树木遮天，狭窄小路通向黑暗森林，清晨冷光，暗黑童话风，电影感构图，细腻光影，1:1，高清细节\n\n---\n\n**第 2 格：人物登场 / 情绪铺垫**\n- 画面描述：橘猫快步走在森林小路上，怀里紧紧抱着一张皱巴巴的求救信，脸上写满焦急。周围灌木密集，远处传来不明动静。\n- 镜头语言：中景，跟拍视角，橘猫居中，前景用树枝遮挡制造窥视感。\n- AI 绘图提示词：拟人化橘猫在深林小路中快步前行，怀抱皱巴巴的求救信，表情焦急，绿色斗篷随动作摆动，周围浓密灌木和树枝遮挡前景，森林阴影深重，冷绿色调，悬疑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 3 格：行动开始 / 关系建立**\n- 画面描述：橘猫来到一棵巨大的古树前，树干上刻着虎爪标记。它抬头看向树后的山洞入口，似乎终于找到了老虎的住处。\n- 镜头语言：仰拍中远景，古树和洞口占据画面主体，橘猫显得渺小。\n- AI 绘图提示词：拟人化橘猫站在巨大古树前，抬头望向阴暗山洞入口，树干上有清晰虎爪标记，橘猫身形渺小，森林深处雾气环绕，仰拍视角，压迫感构图，暗黑童话风，电影感光影，1:1，高清细节\n\n---\n\n**第 4 格：情节推进 / 氛围增强**\n- 画面描述：拟人化老虎从山洞阴影中缓缓走出，高大强壮，披着深色兽皮披风，脸上带着若有若无的笑。橘猫向前一步，双手举起求救信。\n- 镜头语言：中景，老虎在画面上方占据主体，橘猫在下方形成体型对比。\n- AI 绘图提示词：拟人化老虎从阴暗山洞中走出，高大威严，橙黑条纹毛发，披深色兽皮披风，眼神狡黠，拟人化橘猫站在面前举起求救信，体型强烈对比，森林洞口，冷暗光线，戏剧化电影感，暗黑童话插画，1:1 构图\n\n---\n\n**第 5 格：核心画面 / 求救瞬间**\n- 画面描述：橘猫低头恳求老虎帮忙，双爪紧握求救信，神情真诚又害怕。老虎弯下腰，表面温和地听着，身后的尾巴却悄悄卷起一圈绳子。\n- 镜头语言：近景，双人对峙构图，橘猫在前景，老虎俯身形成阴影覆盖。\n- AI 绘图提示词：拟人化橘猫低头恳求，双爪紧握皱巴巴求救信，表情害怕又真诚，拟人化老虎弯腰假装温和倾听，老虎身后尾巴旁隐藏一圈粗麻绳，森林洞口阴影，紧张氛围，电影感近景，暗黑童话风，1:1，高清细节\n\n---\n\n**第 6 格：转折 / 欺骗暴露**\n- 画面描述：老虎忽然露出狡猾笑容，一只大爪子按住橘猫的肩膀，另一只手抖开粗麻绳。橘猫惊恐后退，求救信掉落在地。\n- 镜头语言：动态中景，斜角构图，增强失控和危险感。\n- AI 绘图提示词：拟人化老虎露出狡猾笑容，一只大爪子按住拟人化橘猫肩膀，另一只手抖开粗麻绳，橘猫惊恐后退，皱巴巴求救信掉落在泥地上，森林阴影加深，斜角构图，戏剧化光影，暗黑童话电影感，1:1 构图\n\n---\n\n**第 7 格：高潮 / 被绑到树上**\n- 画面描述：橘猫被粗麻绳绑在古树树干上，双手被束在身侧，斗篷凌乱，表情惊慌。老虎站在旁边拉紧绳结，背影高大，遮住大片光线。\n- 镜头语言：中近景，橘猫居中，老虎侧身占据画面一侧，树干形成垂直压迫构图。\n- AI 绘图提示词：拟人化橘猫被粗麻绳绑在巨大古树树干上，绿色斗篷凌乱，表情惊慌无助，拟人化老虎站在旁边拉紧绳结，高大身影遮住光线，森林深处，冷蓝阴影，暗黑童话风，电影感构图，细腻细节，1:1\n\n---\n\n**第 8 格：收束 / 情绪压低**\n- 画面描述：老虎转身离开，只留下橘猫被绑在树上。地上的求救信被风吹到树根旁，森林里雾气加重，远处乌鸦停在枯枝上。\n- 镜头语言：中远景，老虎背影渐远，橘猫被固定在画面中央，营造孤立感。\n- AI 绘图提示词：深林中，拟人化橘猫被绑在古树上，孤独无助，拟人化老虎背影渐渐走入阴影，地上皱巴巴求救信被风吹到树根旁，枯枝上停着乌鸦，雾气浓重，冷色调，压抑暗黑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 9 格：结尾定格 / 悬念记忆点**\n- 画面描述：夜幕降临，月光穿过树冠照在橘猫脸上。它低头看见脚边一只小萤火虫停在求救信上，眼神从恐惧变成一丝希望，暗示故事尚未结束。\n- 镜头语言：近景特写，橘猫脸部与发光萤火虫形成视觉焦点，浅景深。\n- AI 绘图提示词：夜晚深林，拟人化橘猫被粗麻绳绑在古树上，月光穿过树冠照亮脸庞，橘猫眼神从恐惧变成一丝希望，脚边皱巴巴求救信上停着发光萤火虫，冷蓝月光与微弱暖光对比，暗黑童话电影感，特写构图，1:1，高清细节, Make the aspect ratio 16:9, resolution 2560x1440",
+            "n": 1,
+            "size": "2560x1440",
+            "aspect_ratio": "16:9"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        },
+        {
+          "label": "openai responses image generation",
+          "endpoint": "/responses",
+          "payload": {
+            "model": "gpt-image-2",
+            "input": [
+              {
+                "role": "user",
+                "content": [
+                  {
+                    "type": "input_text",
+                    "text": "### 九宫格分镜提示词\n\n**整体风格设定：**\n- 主题：拟人化橘猫进入深林向拟人化老虎求救，却被老虎欺骗并绑到树上\n- 画面风格：电影感童话暗黑风、拟人动物角色、细腻森林光影\n- 主角设定：拟人化橘猫，穿旧绿色小斗篷，背小布包，神情焦急但善良；拟人化老虎，高大威严，穿深色兽皮披风，眼神狡黠\n- 色彩氛围：深绿色森林、冷蓝阴影、局部暖黄色火光，悬疑压迫感逐渐增强\n- 画幅比例：1:1\n- 视觉关键词：拟人化动物、深林、求救、陷阱、绳索、树木、暗黑童话、电影感、精致构图\n\n---\n\n**第 1 格：开场 / 建立场景**\n- 画面描述：清晨雾气弥漫的深林入口，一条狭窄小路通向幽暗森林深处，树木高耸，枝叶遮天。拟人化橘猫站在路口，背着小布包，紧张地望向森林。\n- 镜头语言：远景，低角度平视，森林形成压迫感，橘猫位于画面下方偏中。\n- AI 绘图提示词：拟人化橘猫，橘色毛发，穿旧绿色小斗篷，背小布包，站在雾气弥漫的深林入口，高大树木遮天，狭窄小路通向黑暗森林，清晨冷光，暗黑童话风，电影感构图，细腻光影，1:1，高清细节\n\n---\n\n**第 2 格：人物登场 / 情绪铺垫**\n- 画面描述：橘猫快步走在森林小路上，怀里紧紧抱着一张皱巴巴的求救信，脸上写满焦急。周围灌木密集，远处传来不明动静。\n- 镜头语言：中景，跟拍视角，橘猫居中，前景用树枝遮挡制造窥视感。\n- AI 绘图提示词：拟人化橘猫在深林小路中快步前行，怀抱皱巴巴的求救信，表情焦急，绿色斗篷随动作摆动，周围浓密灌木和树枝遮挡前景，森林阴影深重，冷绿色调，悬疑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 3 格：行动开始 / 关系建立**\n- 画面描述：橘猫来到一棵巨大的古树前，树干上刻着虎爪标记。它抬头看向树后的山洞入口，似乎终于找到了老虎的住处。\n- 镜头语言：仰拍中远景，古树和洞口占据画面主体，橘猫显得渺小。\n- AI 绘图提示词：拟人化橘猫站在巨大古树前，抬头望向阴暗山洞入口，树干上有清晰虎爪标记，橘猫身形渺小，森林深处雾气环绕，仰拍视角，压迫感构图，暗黑童话风，电影感光影，1:1，高清细节\n\n---\n\n**第 4 格：情节推进 / 氛围增强**\n- 画面描述：拟人化老虎从山洞阴影中缓缓走出，高大强壮，披着深色兽皮披风，脸上带着若有若无的笑。橘猫向前一步，双手举起求救信。\n- 镜头语言：中景，老虎在画面上方占据主体，橘猫在下方形成体型对比。\n- AI 绘图提示词：拟人化老虎从阴暗山洞中走出，高大威严，橙黑条纹毛发，披深色兽皮披风，眼神狡黠，拟人化橘猫站在面前举起求救信，体型强烈对比，森林洞口，冷暗光线，戏剧化电影感，暗黑童话插画，1:1 构图\n\n---\n\n**第 5 格：核心画面 / 求救瞬间**\n- 画面描述：橘猫低头恳求老虎帮忙，双爪紧握求救信，神情真诚又害怕。老虎弯下腰，表面温和地听着，身后的尾巴却悄悄卷起一圈绳子。\n- 镜头语言：近景，双人对峙构图，橘猫在前景，老虎俯身形成阴影覆盖。\n- AI 绘图提示词：拟人化橘猫低头恳求，双爪紧握皱巴巴求救信，表情害怕又真诚，拟人化老虎弯腰假装温和倾听，老虎身后尾巴旁隐藏一圈粗麻绳，森林洞口阴影，紧张氛围，电影感近景，暗黑童话风，1:1，高清细节\n\n---\n\n**第 6 格：转折 / 欺骗暴露**\n- 画面描述：老虎忽然露出狡猾笑容，一只大爪子按住橘猫的肩膀，另一只手抖开粗麻绳。橘猫惊恐后退，求救信掉落在地。\n- 镜头语言：动态中景，斜角构图，增强失控和危险感。\n- AI 绘图提示词：拟人化老虎露出狡猾笑容，一只大爪子按住拟人化橘猫肩膀，另一只手抖开粗麻绳，橘猫惊恐后退，皱巴巴求救信掉落在泥地上，森林阴影加深，斜角构图，戏剧化光影，暗黑童话电影感，1:1 构图\n\n---\n\n**第 7 格：高潮 / 被绑到树上**\n- 画面描述：橘猫被粗麻绳绑在古树树干上，双手被束在身侧，斗篷凌乱，表情惊慌。老虎站在旁边拉紧绳结，背影高大，遮住大片光线。\n- 镜头语言：中近景，橘猫居中，老虎侧身占据画面一侧，树干形成垂直压迫构图。\n- AI 绘图提示词：拟人化橘猫被粗麻绳绑在巨大古树树干上，绿色斗篷凌乱，表情惊慌无助，拟人化老虎站在旁边拉紧绳结，高大身影遮住光线，森林深处，冷蓝阴影，暗黑童话风，电影感构图，细腻细节，1:1\n\n---\n\n**第 8 格：收束 / 情绪压低**\n- 画面描述：老虎转身离开，只留下橘猫被绑在树上。地上的求救信被风吹到树根旁，森林里雾气加重，远处乌鸦停在枯枝上。\n- 镜头语言：中远景，老虎背影渐远，橘猫被固定在画面中央，营造孤立感。\n- AI 绘图提示词：深林中，拟人化橘猫被绑在古树上，孤独无助，拟人化老虎背影渐渐走入阴影，地上皱巴巴求救信被风吹到树根旁，枯枝上停着乌鸦，雾气浓重，冷色调，压抑暗黑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 9 格：结尾定格 / 悬念记忆点**\n- 画面描述：夜幕降临，月光穿过树冠照在橘猫脸上。它低头看见脚边一只小萤火虫停在求救信上，眼神从恐惧变成一丝希望，暗示故事尚未结束。\n- 镜头语言：近景特写，橘猫脸部与发光萤火虫形成视觉焦点，浅景深。\n- AI 绘图提示词：夜晚深林，拟人化橘猫被粗麻绳绑在古树上，月光穿过树冠照亮脸庞，橘猫眼神从恐惧变成一丝希望，脚边皱巴巴求救信上停着发光萤火虫，冷蓝月光与微弱暖光对比，暗黑童话电影感，特写构图，1:1，高清细节, Make the aspect ratio 16:9, resolution 2560x1440"
+                  }
+                ]
+              }
+            ],
+            "tools": [
+              {
+                "type": "image_generation",
+                "size": "2560x1440"
+              }
+            ]
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        },
+        {
+          "label": "openai chat completions image",
+          "endpoint": "/chat/completions",
+          "payload": {
+            "model": "gpt-image-2",
+            "messages": [
+              {
+                "role": "user",
+                "content": "### 九宫格分镜提示词\n\n**整体风格设定：**\n- 主题：拟人化橘猫进入深林向拟人化老虎求救，却被老虎欺骗并绑到树上\n- 画面风格：电影感童话暗黑风、拟人动物角色、细腻森林光影\n- 主角设定：拟人化橘猫，穿旧绿色小斗篷，背小布包，神情焦急但善良；拟人化老虎，高大威严，穿深色兽皮披风，眼神狡黠\n- 色彩氛围：深绿色森林、冷蓝阴影、局部暖黄色火光，悬疑压迫感逐渐增强\n- 画幅比例：1:1\n- 视觉关键词：拟人化动物、深林、求救、陷阱、绳索、树木、暗黑童话、电影感、精致构图\n\n---\n\n**第 1 格：开场 / 建立场景**\n- 画面描述：清晨雾气弥漫的深林入口，一条狭窄小路通向幽暗森林深处，树木高耸，枝叶遮天。拟人化橘猫站在路口，背着小布包，紧张地望向森林。\n- 镜头语言：远景，低角度平视，森林形成压迫感，橘猫位于画面下方偏中。\n- AI 绘图提示词：拟人化橘猫，橘色毛发，穿旧绿色小斗篷，背小布包，站在雾气弥漫的深林入口，高大树木遮天，狭窄小路通向黑暗森林，清晨冷光，暗黑童话风，电影感构图，细腻光影，1:1，高清细节\n\n---\n\n**第 2 格：人物登场 / 情绪铺垫**\n- 画面描述：橘猫快步走在森林小路上，怀里紧紧抱着一张皱巴巴的求救信，脸上写满焦急。周围灌木密集，远处传来不明动静。\n- 镜头语言：中景，跟拍视角，橘猫居中，前景用树枝遮挡制造窥视感。\n- AI 绘图提示词：拟人化橘猫在深林小路中快步前行，怀抱皱巴巴的求救信，表情焦急，绿色斗篷随动作摆动，周围浓密灌木和树枝遮挡前景，森林阴影深重，冷绿色调，悬疑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 3 格：行动开始 / 关系建立**\n- 画面描述：橘猫来到一棵巨大的古树前，树干上刻着虎爪标记。它抬头看向树后的山洞入口，似乎终于找到了老虎的住处。\n- 镜头语言：仰拍中远景，古树和洞口占据画面主体，橘猫显得渺小。\n- AI 绘图提示词：拟人化橘猫站在巨大古树前，抬头望向阴暗山洞入口，树干上有清晰虎爪标记，橘猫身形渺小，森林深处雾气环绕，仰拍视角，压迫感构图，暗黑童话风，电影感光影，1:1，高清细节\n\n---\n\n**第 4 格：情节推进 / 氛围增强**\n- 画面描述：拟人化老虎从山洞阴影中缓缓走出，高大强壮，披着深色兽皮披风，脸上带着若有若无的笑。橘猫向前一步，双手举起求救信。\n- 镜头语言：中景，老虎在画面上方占据主体，橘猫在下方形成体型对比。\n- AI 绘图提示词：拟人化老虎从阴暗山洞中走出，高大威严，橙黑条纹毛发，披深色兽皮披风，眼神狡黠，拟人化橘猫站在面前举起求救信，体型强烈对比，森林洞口，冷暗光线，戏剧化电影感，暗黑童话插画，1:1 构图\n\n---\n\n**第 5 格：核心画面 / 求救瞬间**\n- 画面描述：橘猫低头恳求老虎帮忙，双爪紧握求救信，神情真诚又害怕。老虎弯下腰，表面温和地听着，身后的尾巴却悄悄卷起一圈绳子。\n- 镜头语言：近景，双人对峙构图，橘猫在前景，老虎俯身形成阴影覆盖。\n- AI 绘图提示词：拟人化橘猫低头恳求，双爪紧握皱巴巴求救信，表情害怕又真诚，拟人化老虎弯腰假装温和倾听，老虎身后尾巴旁隐藏一圈粗麻绳，森林洞口阴影，紧张氛围，电影感近景，暗黑童话风，1:1，高清细节\n\n---\n\n**第 6 格：转折 / 欺骗暴露**\n- 画面描述：老虎忽然露出狡猾笑容，一只大爪子按住橘猫的肩膀，另一只手抖开粗麻绳。橘猫惊恐后退，求救信掉落在地。\n- 镜头语言：动态中景，斜角构图，增强失控和危险感。\n- AI 绘图提示词：拟人化老虎露出狡猾笑容，一只大爪子按住拟人化橘猫肩膀，另一只手抖开粗麻绳，橘猫惊恐后退，皱巴巴求救信掉落在泥地上，森林阴影加深，斜角构图，戏剧化光影，暗黑童话电影感，1:1 构图\n\n---\n\n**第 7 格：高潮 / 被绑到树上**\n- 画面描述：橘猫被粗麻绳绑在古树树干上，双手被束在身侧，斗篷凌乱，表情惊慌。老虎站在旁边拉紧绳结，背影高大，遮住大片光线。\n- 镜头语言：中近景，橘猫居中，老虎侧身占据画面一侧，树干形成垂直压迫构图。\n- AI 绘图提示词：拟人化橘猫被粗麻绳绑在巨大古树树干上，绿色斗篷凌乱，表情惊慌无助，拟人化老虎站在旁边拉紧绳结，高大身影遮住光线，森林深处，冷蓝阴影，暗黑童话风，电影感构图，细腻细节，1:1\n\n---\n\n**第 8 格：收束 / 情绪压低**\n- 画面描述：老虎转身离开，只留下橘猫被绑在树上。地上的求救信被风吹到树根旁，森林里雾气加重，远处乌鸦停在枯枝上。\n- 镜头语言：中远景，老虎背影渐远，橘猫被固定在画面中央，营造孤立感。\n- AI 绘图提示词：深林中，拟人化橘猫被绑在古树上，孤独无助，拟人化老虎背影渐渐走入阴影，地上皱巴巴求救信被风吹到树根旁，枯枝上停着乌鸦，雾气浓重，冷色调，压抑暗黑童话电影感，1:1 构图，高清细节\n\n---\n\n**第 9 格：结尾定格 / 悬念记忆点**\n- 画面描述：夜幕降临，月光穿过树冠照在橘猫脸上。它低头看见脚边一只小萤火虫停在求救信上，眼神从恐惧变成一丝希望，暗示故事尚未结束。\n- 镜头语言：近景特写，橘猫脸部与发光萤火虫形成视觉焦点，浅景深。\n- AI 绘图提示词：夜晚深林，拟人化橘猫被粗麻绳绑在古树上，月光穿过树冠照亮脸庞，橘猫眼神从恐惧变成一丝希望，脚边皱巴巴求救信上停着发光萤火虫，冷蓝月光与微弱暖光对比，暗黑童话电影感，特写构图，1:1，高清细节, Make the aspect ratio 16:9, resolution 2560x1440"
+              }
+            ],
+            "modalities": [
+              "image",
+              "text"
+            ],
+            "n": 1,
+            "size": "2560x1440",
+            "aspect_ratio": "16:9"
+          },
+          "useImageEdit": false,
+          "mediaType": "image"
+        }
+      ]
+    },
+    "upstreamUrl": "<data-image omitted length=8295358>",
+    "resultUrl": "/uploads/item-ntlwhx1.png"
+  }
+]

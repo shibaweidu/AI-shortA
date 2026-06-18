@@ -1,0 +1,109 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]:
+      - heading "后台管理" [level=1] [ref=e6]
+      - paragraph [ref=e7]: 站点内容与系统管理
+    - navigation [ref=e8]:
+      - link "用户管理" [ref=e9] [cursor=pointer]:
+        - /url: /appadminklkl9988/users
+        - img [ref=e10]
+        - text: 用户管理
+      - link "首页文案" [ref=e15] [cursor=pointer]:
+        - /url: /appadminklkl9988/home-content
+        - img [ref=e16]
+        - text: 首页文案
+      - link "积分套餐" [ref=e18] [cursor=pointer]:
+        - /url: /appadminklkl9988/packages
+        - img [ref=e19]
+        - text: 积分套餐
+      - link "兑换码管理" [ref=e23] [cursor=pointer]:
+        - /url: /appadminklkl9988/redeem-codes
+        - img [ref=e24]
+        - text: 兑换码管理
+      - link "模型积分" [ref=e26] [cursor=pointer]:
+        - /url: /appadminklkl9988/model-credits
+        - img [ref=e27]
+        - text: 模型积分
+      - link "栏目管理" [ref=e32] [cursor=pointer]:
+        - /url: /appadminklkl9988/categories
+        - img [ref=e33]
+        - text: 栏目管理
+      - link "风格库管理" [ref=e35] [cursor=pointer]:
+        - /url: /appadminklkl9988/styles
+        - img [ref=e36]
+        - text: 风格库管理
+      - link "作品管理" [ref=e42] [cursor=pointer]:
+        - /url: /appadminklkl9988/works
+        - img [ref=e43]
+        - text: 作品管理
+      - link "模型管理" [ref=e47] [cursor=pointer]:
+        - /url: /appadminklkl9988/models
+        - img [ref=e48]
+        - text: 模型管理
+      - link "智能体管理" [ref=e51] [cursor=pointer]:
+        - /url: /appadminklkl9988/agents
+        - img [ref=e52]
+        - text: 智能体管理
+      - link "邮箱配置" [ref=e55] [cursor=pointer]:
+        - /url: /appadminklkl9988/email
+        - img [ref=e56]
+        - text: 邮箱配置
+      - link "对象存储" [ref=e59] [cursor=pointer]:
+        - /url: /appadminklkl9988/storage
+        - img [ref=e60]
+        - text: 对象存储
+      - link "数据备份" [ref=e64] [cursor=pointer]:
+        - /url: /appadminklkl9988/data
+        - img [ref=e65]
+        - text: 数据备份
+      - link "系统日志" [ref=e68] [cursor=pointer]:
+        - /url: /appadminklkl9988/logs
+        - img [ref=e69]
+        - text: 系统日志
+      - link "管理员设置" [ref=e71] [cursor=pointer]:
+        - /url: /appadminklkl9988/settings
+        - img [ref=e72]
+        - text: 管理员设置
+    - generic [ref=e74]:
+      - generic [ref=e75]:
+        - generic [ref=e76]: admin
+        - button "退出后台" [ref=e77] [cursor=pointer]:
+          - img [ref=e78]
+          - text: 退出后台
+      - link "返回首页" [ref=e81] [cursor=pointer]:
+        - /url: /
+        - img [ref=e82]
+        - text: 返回首页
+  - main [ref=e85]:
+    - generic [ref=e86]:
+      - generic [ref=e87]:
+        - heading "风格库管理" [level=1] [ref=e88]
+        - paragraph [ref=e89]: 管理图生图风格库、分类、封面图和风格提示词。
+      - generic [ref=e90]:
+        - generic [ref=e91]:
+          - heading "分类" [level=2] [ref=e92]
+          - generic [ref=e93]:
+            - textbox "新分类名称" [ref=e94]
+            - button [ref=e95] [cursor=pointer]:
+              - img [ref=e96]
+        - generic [ref=e97]:
+          - generic [ref=e98]:
+            - heading "新增风格" [level=2] [ref=e100]
+            - generic [ref=e101]:
+              - generic [ref=e103] [cursor=pointer]:
+                - img [ref=e104]
+                - generic [ref=e108]: 上传封面
+              - generic [ref=e109]:
+                - textbox "风格名称" [ref=e110]
+                - textbox "封面图 URL" [ref=e111]
+                - textbox "风格提示词，建议描述色彩、光影、笔触、材质、渲染方式" [ref=e112]
+                - generic [ref=e113]:
+                  - generic [ref=e114]: 强度
+                  - slider [ref=e115]: "0.65"
+                  - generic [ref=e116]: 65%
+            - button "保存风格" [ref=e118] [cursor=pointer]:
+              - img [ref=e119]
+              - text: 保存风格
+          - generic [ref=e125]:
+            - heading "风格列表" [level=2] [ref=e126]
+            - paragraph [ref=e127]: 0 个风格，可独立滚动浏览。
