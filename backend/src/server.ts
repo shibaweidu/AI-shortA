@@ -1235,6 +1235,40 @@ app.post("/api/uploads/images", upload.array("images", 8), async (request, respo
   }
 });
 
+app.post("/api/uploads/files", upload.array("files", 8), async (request, response) => {
+  const files = Array.isArray(request.files) ? request.files as Express.Multer.File[] : [];
+  if (!files.length) {
+    response.status(400).json({ error: "files are required" });
+    return;
+  }
+
+  try {
+    await mkdir(UPLOADS_DIR, { recursive: true });
+    const uploaded = await Promise.all(files.map(async (file) => {
+      const originalExtension = extname(file.originalname).toLowerCase().replace(/[^.\w-]/g, "");
+      const extension = originalExtension || ".bin";
+      const fileName = `${createId("file")}${extension}`;
+      const url = isObjectStorageEnabled()
+        ? await putObjectStorageObject({
+            key: buildObjectStorageKey("uploads", fileName),
+            body: file.buffer,
+            contentType: file.mimetype || "application/octet-stream",
+          })
+        : await saveLocalUploadFile(fileName, file.buffer);
+      return {
+        url,
+        name: file.originalname,
+        size: file.size,
+        mimeType: file.mimetype || "application/octet-stream",
+      };
+    }));
+
+    response.json({ files: uploaded });
+  } catch (error) {
+    response.status(400).json({ error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 // Agent API endpoints
 app.get("/api/agents", (_request, response) => {
   response.json(Array.from(agents.values()));

@@ -5,6 +5,7 @@ import { MainLayout } from "./components/layout/MainLayout";
 import { RequireAuth } from "./components/RequireAuth";
 import { SharedStoreSync } from "./components/SharedStoreSync";
 import LandingHome from "./pages/home/LandingHome";
+import SiteCustomPage from "./pages/home/SiteCustomPage";
 import Auth from "./pages/auth/Auth";
 import Profile from "./pages/profile/Profile";
 import Flow from "./pages/flow/Flow";
@@ -31,6 +32,7 @@ import AdminStorage from "./pages/admin/AdminStorage";
 import AdminData from "./pages/admin/AdminData";
 import AgentCreate from "./pages/agent/AgentCreate";
 import DiscoverWorkDetail from "./pages/discover/DiscoverWorkDetail";
+import NavDebug from "./pages/debug/NavDebug";
 import { ADMIN_BASE_PATH, ADMIN_LOGIN_PATH, adminPath } from "./lib/adminRoutes";
 import "./index.css";
 
@@ -86,6 +88,14 @@ const router = createBrowserRouter([
       {
         path: "credits",
         element: <RequireAuth><Credits /></RequireAuth>,
+      },
+      {
+        path: "pages/:pageId",
+        element: <SiteCustomPage />,
+      },
+      {
+        path: "debug/nav",
+        element: <NavDebug />,
       },
       {
         path: "*",

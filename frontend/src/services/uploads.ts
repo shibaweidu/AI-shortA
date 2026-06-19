@@ -7,6 +7,8 @@ export type UploadedImageFile = {
   mimeType: string;
 };
 
+export type UploadedFile = UploadedImageFile;
+
 export async function uploadImageFiles(files: File[]): Promise<UploadedImageFile[]> {
   const formData = new FormData();
   files.forEach((file) => formData.append("images", file));
@@ -21,5 +23,22 @@ export async function uploadImageFiles(files: File[]): Promise<UploadedImageFile
   }
 
   const data = await response.json() as { files?: UploadedImageFile[] };
+  return data.files ?? [];
+}
+
+export async function uploadFiles(files: File[]): Promise<UploadedFile[]> {
+  const formData = new FormData();
+  files.forEach((file) => formData.append("files", file));
+
+  const response = await fetch(`${API_BASE}/api/uploads/files`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => null) as { error?: string } | null;
+    throw new Error(error?.error || `Upload failed: ${response.status}`);
+  }
+
+  const data = await response.json() as { files?: UploadedFile[] };
   return data.files ?? [];
 }

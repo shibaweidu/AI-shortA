@@ -1,7 +1,8 @@
-import { FolderKanban, Home, Settings, UserCircle, Wallet } from "lucide-react";
+import { FileText as FileTextIcon, FolderKanban, Home, Settings, UserCircle, Wallet } from "lucide-react";
 import { Link, NavLink, Outlet } from "react-router-dom";
-import { cn } from "../../lib/utils";
+import { cn, getDisplayAssetUrl } from "../../lib/utils";
 import { useAuthStore } from "../../store/authStore";
+import { hasRenderableSitePage, useSiteContentStore } from "../../store/siteContentStore";
 
 const primaryNav = [
   { to: "/", label: "首页", icon: Home, end: true },
@@ -9,15 +10,20 @@ const primaryNav = [
   { to: "/credits", label: "积分", icon: Wallet, end: false },
 ];
 
-function BrandMark() {
-  return <img src="/koala-ai-logo.png" alt="考拉AI" className="h-10 w-10 rounded-none object-cover" />;
+function BrandMark({ logoUrl, title }: { logoUrl: string; title: string }) {
+  return <img src={getDisplayAssetUrl(logoUrl)} alt={title} className="h-10 w-10 rounded-none object-contain" />;
 }
 
 export function MainLayout() {
   const { users, currentUserId, hasHydrated } = useAuthStore();
+  const { siteLogoUrl, siteTitle, siteTagline, customNavItems } = useSiteContentStore();
   const currentUser = hasHydrated ? users.find((user) => user.id === currentUserId) : undefined;
+  const customNav = customNavItems
+    .map((item) => ({ ...item, id: item.id || `nav-${Date.now()}` }))
+    .filter(hasRenderableSitePage);
   const mobileNav = [
     ...primaryNav,
+    ...customNav.map((item) => ({ to: `/pages/${item.id}`, label: item.label, icon: FileTextIcon, end: false })),
     hasHydrated && currentUser
       ? { to: "/profile", label: "个人", icon: UserCircle, end: false }
       : { to: "/auth", label: "登录", icon: Wallet, end: false },
@@ -28,9 +34,12 @@ export function MainLayout() {
     <div className="flex h-screen overflow-hidden bg-[#08090d] text-white">
       <aside className="hidden w-[168px] shrink-0 flex-col px-3 py-4 md:flex lg:w-[180px]">
         <Link to="/" className="mb-6 flex items-center gap-2.5 rounded-3xl px-2 py-1.5">
-          <BrandMark />
-          <div className="min-w-0">
-            <div className="text-[18px] font-semibold tracking-tight text-white">考拉AI</div>
+          <BrandMark logoUrl={siteLogoUrl} title={siteTitle} />
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <div className="truncate text-[18px] font-semibold tracking-tight text-white">
+              {siteTitle}
+            </div>
+            {siteTagline ? <div className="truncate text-[11px] font-normal text-[#8f97aa]">{siteTagline}</div> : null}
           </div>
         </Link>
 
@@ -52,6 +61,26 @@ export function MainLayout() {
             </NavLink>
           ))}
         </nav>
+
+        {customNav.length > 0 ? (
+          <nav className="mt-5 flex flex-col gap-2 border-t border-white/[0.06] pt-5">
+            {customNav.map((item) => (
+              <NavLink
+                key={item.id}
+                to={`/pages/${item.id}`}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center gap-3 rounded-2xl px-3 py-3 text-sm transition",
+                    isActive ? "bg-white/8 text-white" : "text-[#737b8b] hover:bg-white/4 hover:text-white"
+                  )
+                }
+              >
+                <FileTextIcon className="h-4 w-4" />
+                <span className="truncate">{item.label}</span>
+              </NavLink>
+            ))}
+          </nav>
+        ) : null}
 
         <div className="mt-auto pt-4">
           <div className="border-t border-white/[0.06] pt-4">
@@ -105,7 +134,7 @@ export function MainLayout() {
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-[900] border-t border-white/[0.08] bg-[#0b0d12]/95 px-2 pb-[max(env(safe-area-inset-bottom),8px)] pt-2 backdrop-blur md:hidden">
-        <div className="grid grid-cols-5 gap-1">
+        <div className="grid auto-cols-fr grid-flow-col gap-1 overflow-x-auto">
           {mobileNav.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
