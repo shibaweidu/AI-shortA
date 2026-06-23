@@ -2,7 +2,7 @@ import { FileText as FileTextIcon, FolderKanban, Home, Settings, UserCircle, Wal
 import { Link, NavLink, Outlet } from "react-router-dom";
 import { cn, getDisplayAssetUrl } from "../../lib/utils";
 import { useAuthStore } from "../../store/authStore";
-import { hasRenderableSitePage, useSiteContentStore } from "../../store/siteContentStore";
+import { hasRenderableSitePage, normalizeSiteNavItem, useSiteContentStore } from "../../store/siteContentStore";
 
 const primaryNav = [
   { to: "/", label: "首页", icon: Home, end: true },
@@ -18,9 +18,7 @@ export function MainLayout() {
   const { users, currentUserId, hasHydrated } = useAuthStore();
   const { siteLogoUrl, siteTitle, siteTagline, customNavItems } = useSiteContentStore();
   const currentUser = hasHydrated ? users.find((user) => user.id === currentUserId) : undefined;
-  const customNav = customNavItems
-    .map((item) => ({ ...item, id: item.id || `nav-${Date.now()}` }))
-    .filter(hasRenderableSitePage);
+  const customNav = customNavItems.map(normalizeSiteNavItem).filter(hasRenderableSitePage);
   const mobileNav = [
     ...primaryNav,
     ...customNav.map((item) => ({ to: `/pages/${item.id}`, label: item.label, icon: FileTextIcon, end: false })),
@@ -36,10 +34,10 @@ export function MainLayout() {
         <Link to="/" className="mb-6 flex items-center gap-2.5 rounded-3xl px-2 py-1.5">
           <BrandMark logoUrl={siteLogoUrl} title={siteTitle} />
           <div className="min-w-0 flex-1 overflow-hidden">
-            <div className="truncate text-[18px] font-semibold tracking-tight text-white">
+            <div className="truncate whitespace-nowrap text-[18px] font-semibold tracking-tight text-white">
               {siteTitle}
+              {siteTagline ? <span className="ml-2 text-[11px] font-normal text-[#8f97aa]">{siteTagline}</span> : null}
             </div>
-            {siteTagline ? <div className="truncate text-[11px] font-normal text-[#8f97aa]">{siteTagline}</div> : null}
           </div>
         </Link>
 
