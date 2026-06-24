@@ -20,6 +20,7 @@ import AdminHomeContent from "./pages/admin/AdminHomeContent";
 import AdminCategories from "./pages/admin/AdminCategories";
 import AdminStyles from "./pages/admin/AdminStyles";
 import AdminWorks from "./pages/admin/AdminWorks";
+import AdminCollection from "./pages/admin/AdminCollection";
 import AdminModels from "./pages/admin/AdminModels";
 import AdminModelCredits from "./pages/admin/AdminModelCredits";
 import AdminPackages from "./pages/admin/AdminPackages";
@@ -158,6 +159,10 @@ const router = createBrowserRouter([
       {
         path: "works",
         element: <AdminWorks />,
+      },
+      {
+        path: "collection",
+        element: <AdminCollection />,
       },
       {
         path: "models",

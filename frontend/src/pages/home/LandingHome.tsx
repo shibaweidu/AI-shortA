@@ -28,6 +28,7 @@ import {
   getVideoDurationOptionsForModel,
 } from "../../lib/generatorOptions";
 import { generateImageAsset, generateVideoAsset } from "../../services/media";
+import { fetchHomeFeed, reportCollectionImageBroken, type CollectionWork } from "../../services/collection";
 
 function padNumber(value: number) {
   return value.toString().padStart(2, "0");
@@ -52,6 +53,7 @@ export default function LandingHome() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const generatorRef = useRef<HTMLDivElement>(null);
+  const feedLoadMoreRef = useRef<HTMLDivElement>(null);
   const { projects, items, addProject, addItem, updateItem, hasHydrated } = useFlowStore();
   const { spendCredits, refundCredits } = useCreditStore();
   const { currentUserId } = useAuthStore();
@@ -76,6 +78,11 @@ export default function LandingHome() {
   const [selectedStyle, setSelectedStyle] = useState<SelectedStyleReference | null>(null);
   const [openGeneratorPanel, setOpenGeneratorPanel] = useState<"type" | "model" | "ratio" | "count" | "assets" | "styles" | null>(null);
   const [showAllProjects, setShowAllProjects] = useState(false);
+  const [feedItems, setFeedItems] = useState<CollectionWork[]>([]);
+  const [feedCursor, setFeedCursor] = useState<string | undefined>();
+  const [feedHasMore, setFeedHasMore] = useState(false);
+  const [feedLoading, setFeedLoading] = useState(false);
+  const [feedError, setFeedError] = useState("");
 
   // 处理做同款功能
   useEffect(() => {
@@ -92,6 +99,16 @@ export default function LandingHome() {
           generatorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
         }, 100);
       }
+    }
+    const promptParam = searchParams.get("prompt");
+    const ratioParam = searchParams.get("ratio");
+    if (promptParam) {
+      setPrompt(promptParam);
+      if (ratioParam) setAspectRatio(ratioParam);
+      setSearchParams({});
+      setTimeout(() => {
+        generatorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 100);
     }
   }, [searchParams, works, discoverHydrated, setSearchParams]);
 
@@ -161,24 +178,37 @@ export default function LandingHome() {
   const titleSuffix = titleHighlightIndex >= 0 ? homeTitle.slice(titleHighlightIndex + 1) : "";
   const publicCategories = useMemo(() => {
     const categoryIdsWithWorks = new Set(works.map((work) => work.categoryId));
-    return categories.filter((category) => categoryIdsWithWorks.has(category.id));
-  }, [categories, works]);
-  const hasPublishedDiscoverContent = works.length > 0;
+    const legacyCategories = categories.filter((category) => categoryIdsWithWorks.has(category.id));
+    const collectionCategories = Array.from(new Map(feedItems.map((work) => [work.categoryId, { id: work.categoryId, name: work.categoryName }])).values());
+    return [...legacyCategories, ...collectionCategories.filter((category) => !legacyCategories.some((item) => item.id === category.id))];
+  }, [categories, feedItems, works]);
+  const hasPublishedDiscoverContent = works.length > 0 || feedItems.length > 0;
 
   const visibleCards = useMemo(() => {
+    const collectionCards = feedItems.map((work) => ({
+      id: work.id,
+      categoryId: work.categoryId,
+      title: work.title,
+      coverUrl: work.coverUrl,
+      prompt: work.prompt,
+      source: "collection" as const,
+      categoryName: work.categoryName,
+    }));
+    const legacyCards = works.map((work) => ({ ...work, source: "legacy" as const, categoryName: categories.find((category) => category.id === work.categoryId)?.name }));
+    const sourceCards = feedItems.length > 0 ? collectionCards : legacyCards;
     const filtered = activeTab
-      ? works.filter((w) => {
+      ? sourceCards.filter((w) => {
           const cat = categories.find((c) => c.id === w.categoryId);
-          return cat?.id === activeTab;
+          return feedItems.length > 0 || cat?.id === activeTab || w.categoryId === activeTab;
         })
-      : works;
+      : sourceCards;
 
     const query = discoverQuery.trim().toLowerCase();
     if (!query) return filtered;
     return filtered.filter((work) =>
       `${work.title} ${work.prompt}`.toLowerCase().includes(query)
     );
-  }, [activeTab, discoverQuery, works, categories]);
+  }, [activeTab, discoverQuery, feedItems, works, categories]);
 
   useEffect(() => {
     if (!activeTab) return;
@@ -215,6 +245,47 @@ export default function LandingHome() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const loadFeedPage = async (cursor?: string, categoryId = activeTab) => {
+    if (feedLoading) return;
+    setFeedLoading(true);
+    setFeedError("");
+    try {
+      const page = await fetchHomeFeed({ cursor, limit: 30, categoryId: categoryId || undefined });
+      setFeedItems((current) => cursor ? [...current, ...page.items.filter((item) => !current.some((existing) => existing.id === item.id))] : page.items);
+      setFeedCursor(page.nextCursor);
+      setFeedHasMore(page.hasMore);
+    } catch (error) {
+      setFeedError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setFeedLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    setFeedItems([]);
+    setFeedCursor(undefined);
+    setFeedHasMore(false);
+    void loadFeedPage(undefined, activeTab);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  useEffect(() => {
+    const target = feedLoadMoreRef.current;
+    if (!target) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((entry) => entry.isIntersecting)) return;
+      if (!feedHasMore || feedLoading || !feedCursor) return;
+      void loadFeedPage(feedCursor, activeTab);
+    }, { rootMargin: "800px 0px" });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [feedCursor, feedHasMore, feedLoading]);
+
+  const handleCollectionImageError = (workId: string) => {
+    setFeedItems((current) => current.filter((item) => item.id !== workId));
+    void reportCollectionImageBroken(workId);
+  };
 
   const handleGenerate = async () => {
     if ((!prompt.trim() && referenceImages.length === 0) || !model) return;
@@ -559,16 +630,24 @@ export default function LandingHome() {
               return (
                 <article
                   key={work.id}
-                  onClick={() => navigate(`/discover/${work.id}`)}
+                  onClick={() => navigate(work.source === "collection" ? `/discover/${work.id}?source=collection` : `/discover/${work.id}`)}
                   className="group mb-6 break-inside-avoid cursor-pointer overflow-hidden rounded-[24px] border border-white/10 bg-[#17191f] shadow-[0_20px_60px_rgba(0,0,0,0.4)] transition duration-500 hover:-translate-y-2 hover:border-white/20 hover:shadow-[0_30px_80px_rgba(0,0,0,0.6)]"
                 >
                   <div className="relative aspect-[4/5] overflow-hidden">
-                    <img src={work.coverUrl} alt={work.title} className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
+                    <img
+                      src={work.coverUrl}
+                      alt={work.title}
+                      loading="lazy"
+                      onError={() => {
+                        if (work.source === "collection") handleCollectionImageError(work.id);
+                      }}
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                    />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
                     <div className="absolute left-3 top-3 sm:left-4 sm:top-4">
                       <span className="rounded-full border border-white/10 bg-black/40 px-2.5 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-medium text-white/90 backdrop-blur-md">
-                        {category?.name || "未分类"}
+                        {category?.name || work.categoryName || "未分类"}
                       </span>
                     </div>
 
@@ -581,6 +660,18 @@ export default function LandingHome() {
               );
             })}
           </div>
+
+          {feedItems.length > 0 ? (
+            <div ref={feedLoadMoreRef} className="flex min-h-16 items-center justify-center py-6 text-sm text-[#7f8796]">
+              {feedLoading ? "加载更多作品中..." : feedHasMore ? "继续下滑加载更多" : "已经到底了"}
+            </div>
+          ) : null}
+
+          {feedError ? (
+            <div className="mt-4 rounded-2xl border border-yellow-400/20 bg-yellow-500/10 p-4 text-sm text-yellow-100">
+              推荐流加载失败：{feedError}
+            </div>
+          ) : null}
 
           {visibleCards.length === 0 && (
             <div className="mt-8 rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] p-12 text-center text-[#8f97aa]">

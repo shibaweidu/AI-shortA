@@ -30,14 +30,12 @@ export function MainLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#08090d] text-white">
-      <aside className="hidden w-[168px] shrink-0 flex-col px-3 py-4 md:flex lg:w-[180px]">
+      <aside className="hidden w-[220px] shrink-0 flex-col px-3 py-4 md:flex lg:w-[240px]">
         <Link to="/" className="mb-6 flex items-center gap-2.5 rounded-3xl px-2 py-1.5">
           <BrandMark logoUrl={siteLogoUrl} title={siteTitle} />
-          <div className="min-w-0 flex-1 overflow-hidden">
-            <div className="truncate whitespace-nowrap text-[18px] font-semibold tracking-tight text-white">
-              {siteTitle}
-              {siteTagline ? <span className="ml-2 text-[11px] font-normal text-[#8f97aa]">{siteTagline}</span> : null}
-            </div>
+          <div className="flex min-w-0 flex-1 items-baseline gap-2 overflow-hidden">
+            <div className="shrink-0 whitespace-nowrap text-[18px] font-semibold tracking-tight text-white">{siteTitle}</div>
+            {siteTagline ? <div className="min-w-0 flex-1 whitespace-nowrap text-[11px] font-normal text-[#8f97aa]">{siteTagline}</div> : null}
           </div>
         </Link>
 

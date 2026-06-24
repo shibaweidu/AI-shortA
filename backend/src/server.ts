@@ -8,11 +8,13 @@ import { createWriteStream } from "node:fs";
 import { appendFile, mkdir, readdir, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { createHash, randomInt } from "node:crypto";
 import { randomUUID } from "node:crypto";
+import { execFile } from "node:child_process";
 import { setDefaultResultOrder } from "node:dns";
 import { setDefaultAutoSelectFamily } from "node:net";
 import { basename, dirname, extname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { promisify } from "node:util";
 import {
   loadLegacyStateFromPostgres,
   saveAgentsSnapshotToPostgres,
@@ -38,10 +40,12 @@ const AGENTS_FILE = join(DATA_DIR, "agents.json");
 const EMAIL_CONFIG_FILE = join(DATA_DIR, "email-config.json");
 const STORAGE_CONFIG_FILE = join(DATA_DIR, "storage-config.json");
 const STYLE_LIBRARY_FILE = join(DATA_DIR, "style-library.json");
+const COLLECTION_LIBRARY_FILE = join(DATA_DIR, "collection-library.json");
 const BACKUPS_DIR = join(DATA_DIR, "backups");
 const IMAGE_JOBS_LOG_FILE = join(LOGS_DIR, "image-jobs.log");
 const APP_STATE_LOG_FILE = join(LOGS_DIR, "app-state.log");
 const generationResultCache = new Map<string, { createdAt: number; request?: unknown; response: unknown }>();
+const execFileAsync = promisify(execFile);
 
 function pruneGenerationResultCache() {
   const cutoff = Date.now() - 1000 * 60 * 60 * 6;
@@ -204,6 +208,89 @@ type StylePreset = {
 type StyleLibrary = {
   categories: StyleCategory[];
   styles: StylePreset[];
+};
+
+type CollectionProvider = "civitai" | "lexica";
+type CollectionWorkStatus = "pending" | "published" | "rejected" | "broken";
+
+type CollectionSource = {
+  id: string;
+  provider: CollectionProvider;
+  name: string;
+  query: string;
+  enabled: boolean;
+  targetCategoryId?: string;
+  targetCategoryName?: string;
+  targetTags: string[];
+  autoPublish: boolean;
+  filterNsfw: boolean;
+  maxItemsPerRun: number;
+  scheduleEveryHours?: number;
+  lastRunAt?: number;
+  createdAt: number;
+  updatedAt: number;
+};
+
+type CollectionWork = {
+  id: string;
+  sourceId?: string;
+  provider: CollectionProvider;
+  sourceWorkId?: string;
+  sourcePageUrl?: string;
+  originalImageUrl: string;
+  displayUrl: string;
+  thumbnailUrl?: string;
+  title: string;
+  prompt: string;
+  negativePrompt?: string;
+  model?: string;
+  aspectRatio: string;
+  width?: number;
+  height?: number;
+  categoryId: string;
+  categoryName: string;
+  tags: string[];
+  nsfw: boolean;
+  qualityScore: number;
+  recommendationScore: number;
+  featured: boolean;
+  featuredAt?: number;
+  status: CollectionWorkStatus;
+  failedCount: number;
+  lastFailedAt?: number;
+  metadata: Record<string, unknown>;
+  collectedAt: number;
+  publishedAt?: number;
+  createdAt: number;
+  updatedAt: number;
+};
+
+type CollectionLibrary = {
+  sources: CollectionSource[];
+  works: CollectionWork[];
+  runs: CollectionRun[];
+};
+
+type CollectionRun = {
+  id: string;
+  sourceId: string;
+  provider: CollectionProvider;
+  query: string;
+  status: "running" | "completed" | "failed";
+  fetched: number;
+  added: number;
+  skipped: number;
+  error?: string;
+  startedAt: number;
+  finishedAt?: number;
+};
+
+type CollectionClassifierSettings = {
+  enabled: boolean;
+  visionModelValue: string;
+  modelId: string;
+  provider?: ProviderRequestConfig;
+  classificationPrompt: string;
 };
 
 type DataBackupManifest = {
@@ -378,6 +465,7 @@ const DEFAULT_STYLE_LIBRARY: StyleLibrary = {
 };
 
 let styleLibrary: StyleLibrary = { ...DEFAULT_STYLE_LIBRARY };
+let collectionLibrary: CollectionLibrary = { sources: [], works: [], runs: [] };
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 30 * 1024 * 1024, files: 8 } });
@@ -393,10 +481,22 @@ let agentsSaveChain = Promise.resolve();
 let emailConfigSaveChain = Promise.resolve();
 let styleLibrarySaveChain = Promise.resolve();
 let storageConfigSaveChain = Promise.resolve();
+let collectionLibrarySaveChain = Promise.resolve();
 let emailConfig: EmailConfig = { ...DEFAULT_EMAIL_CONFIG };
 let objectStorageConfig: ObjectStorageConfig = { ...DEFAULT_OBJECT_STORAGE_CONFIG };
+let runningCollectionJobs = 0;
+const collectionJobQueue: Array<{
+  source: CollectionSource;
+  attemptsLeft: number;
+  resolve: (value: Awaited<ReturnType<typeof runCollectionSourceNow>>) => void;
+  reject: (error: unknown) => void;
+}> = [];
+const queuedCollectionSourceIds = new Set<string>();
+const COLLECTION_QUEUE_CONCURRENCY = Math.max(1, Math.min(5, Number(process.env.COLLECTION_QUEUE_CONCURRENCY ?? 2)));
+const COLLECTION_QUEUE_RETRIES = Math.max(0, Math.min(5, Number(process.env.COLLECTION_QUEUE_RETRIES ?? 2)));
 
 const REFERENCE_SETTINGS_KEY = "reference-settings";
+const COLLECTION_CLASSIFIER_SETTINGS_KEY = "collection-classifier-settings";
 const DEFAULT_REFERENCE_SETTINGS: ReferenceSettings = {
   visionModelValue: "",
   classificationPrompt:
@@ -412,6 +512,14 @@ const DEFAULT_REFERENCE_SETTINGS: ReferenceSettings = {
       "Image {index}: general content reference. Use only the relevant visual details that support the user prompt.",
   },
 };
+const DEFAULT_COLLECTION_CLASSIFIER_SETTINGS: CollectionClassifierSettings = {
+  enabled: false,
+  visionModelValue: "",
+  modelId: "",
+  classificationPrompt:
+    '你是 AI 作品采集分类器。请根据图片、prompt、模型和标签，把作品归入一个首页主分类。只能返回 JSON：{"categoryId":"portrait|character|scene|product|poster|illustration|style|anime|cg|chinese","categoryName":"中文分类名","tags":["标签1","标签2"],"confidence":0-1}。分类定义：portrait=真人/摄影/人像，character=角色/IP/头像，scene=风景/建筑/室内/环境，product=商品/包装/器物，poster=海报/封面/排版，illustration=插画/概念图/绘本，style=视觉风格/技法/材质，anime=二次元/漫画/赛璐璐，cg=3D/CG/渲染，chinese=国风/汉服/水墨/武侠。',
+};
+let collectionClassifierSettings: CollectionClassifierSettings = { ...DEFAULT_COLLECTION_CLASSIFIER_SETTINGS };
 
 app.use(cors());
 app.set("trust proxy", process.env.TRUST_PROXY ?? "loopback");
@@ -684,6 +792,668 @@ app.put("/api/reference-settings", (request, response) => {
   appState.set(REFERENCE_SETTINGS_KEY, JSON.stringify(settings));
   void saveAppStateSoon();
   response.json(settings);
+});
+
+app.get("/api/collection/classifier-settings", (_request, response) => {
+  response.json(getCollectionClassifierSettings());
+});
+
+app.put("/api/collection/classifier-settings", (request, response) => {
+  collectionClassifierSettings = normalizeCollectionClassifierSettings(request.body);
+  appState.set(COLLECTION_CLASSIFIER_SETTINGS_KEY, JSON.stringify(collectionClassifierSettings));
+  void saveAppStateSoon();
+  response.json(collectionClassifierSettings);
+});
+
+type CollectedCandidate = {
+  provider: CollectionProvider;
+  sourceWorkId?: string;
+  sourcePageUrl?: string;
+  originalImageUrl: string;
+  displayUrl?: string;
+  thumbnailUrl?: string;
+  title?: string;
+  prompt?: string;
+  negativePrompt?: string;
+  model?: string;
+  width?: number;
+  height?: number;
+  nsfw?: boolean;
+  tags?: string[];
+  metadata?: Record<string, unknown>;
+};
+
+function getCollectionPublicWork(work: CollectionWork) {
+  return {
+    id: work.id,
+    sourceId: work.sourceId,
+    provider: work.provider,
+    sourceWorkId: work.sourceWorkId,
+    sourcePageUrl: work.sourcePageUrl,
+    originalImageUrl: work.originalImageUrl,
+    displayUrl: work.displayUrl,
+    thumbnailUrl: work.thumbnailUrl,
+    coverUrl: work.thumbnailUrl || work.displayUrl || work.originalImageUrl,
+    title: work.title,
+    prompt: work.prompt,
+    negativePrompt: work.negativePrompt,
+    model: work.model,
+    aspectRatio: work.aspectRatio,
+    width: work.width,
+    height: work.height,
+    categoryId: work.categoryId,
+    categoryName: work.categoryName,
+    tags: work.tags,
+    nsfw: work.nsfw,
+    status: work.status,
+    failedCount: work.failedCount,
+    featured: work.featured,
+    featuredAt: work.featuredAt,
+    collectedAt: work.collectedAt,
+    publishedAt: work.publishedAt,
+    recommendationScore: work.recommendationScore,
+    metadata: work.metadata,
+  };
+}
+
+function getCollectionCursor(work: CollectionWork) {
+  return `${work.featured ? 1 : 0}:${work.featuredAt ?? 0}:${work.recommendationScore}:${work.collectedAt}:${work.id}`;
+}
+
+function compareCollectionWorks(left: CollectionWork, right: CollectionWork) {
+  if (left.featured !== right.featured) return left.featured ? -1 : 1;
+  if ((right.featuredAt ?? 0) !== (left.featuredAt ?? 0)) return (right.featuredAt ?? 0) - (left.featuredAt ?? 0);
+  if (right.recommendationScore !== left.recommendationScore) return right.recommendationScore - left.recommendationScore;
+  if (right.collectedAt !== left.collectedAt) return right.collectedAt - left.collectedAt;
+  return right.id.localeCompare(left.id);
+}
+
+function filterCollectionWorks(input: { status?: string; categoryId?: string; includeNsfw?: boolean }) {
+  return collectionLibrary.works
+    .filter((work) => !input.status || work.status === input.status)
+    .filter((work) => input.includeNsfw || !work.nsfw)
+    .filter((work) => !input.categoryId || work.categoryId === input.categoryId)
+    .sort(compareCollectionWorks);
+}
+
+function paginateCollectionWorks(works: CollectionWork[], cursor: string | undefined, limit: number) {
+  const startIndex = cursor ? works.findIndex((work) => getCollectionCursor(work) === cursor) + 1 : 0;
+  const safeStart = Math.max(0, startIndex);
+  const items = works.slice(safeStart, safeStart + limit);
+  const last = items.at(-1);
+  return {
+    items,
+    nextCursor: last && safeStart + items.length < works.length ? getCollectionCursor(last) : undefined,
+    hasMore: safeStart + items.length < works.length,
+  };
+}
+
+async function collectFromLexica(query: string, limit: number): Promise<CollectedCandidate[]> {
+  const targetUrl = `https://lexica.art/api/v1/search?q=${encodeURIComponent(query)}`;
+  const data = asPlainRecord(await fetchJsonWithPowerShellFallback(targetUrl));
+  const images = Array.isArray(data.images) ? data.images : [];
+  return images.slice(0, limit).map((item): CollectedCandidate | null => {
+    const record = asPlainRecord(item);
+    const originalImageUrl = normalizeUrl(record.src);
+    if (!originalImageUrl) return null;
+    const gallery = getStringField(record, "gallery");
+    const width = getNumberField(record, "width");
+    const height = getNumberField(record, "height");
+    const prompt = getStringField(record, "prompt");
+    return {
+      provider: "lexica",
+      sourceWorkId: getStringField(record, "id") || originalImageUrl,
+      sourcePageUrl: gallery ? `https://lexica.art/prompt/${gallery}` : undefined,
+      originalImageUrl,
+      displayUrl: originalImageUrl,
+      thumbnailUrl: normalizeUrl(record.srcSmall) || undefined,
+      title: createCollectionTitle(prompt, "lexica"),
+      prompt,
+      model: getStringField(record, "model") || undefined,
+      width,
+      height,
+      nsfw: record.nsfw === true,
+      metadata: record,
+    };
+  }).filter((item): item is CollectedCandidate => Boolean(item));
+}
+
+async function collectFromCivitai(query: string, limit: number): Promise<CollectedCandidate[]> {
+  const params = new URLSearchParams({
+    limit: String(Math.max(1, Math.min(100, limit))),
+    sort: "Most Reactions",
+    period: "Month",
+  });
+  const trimmedQuery = query.trim();
+  if (trimmedQuery) params.set("query", trimmedQuery);
+  const targetUrl = `https://civitai.com/api/v1/images?${params.toString()}`;
+  const data = asPlainRecord(await fetchJsonWithPowerShellFallback(targetUrl));
+  const items = Array.isArray(data.items) ? data.items : [];
+  return items.slice(0, limit).map((item): CollectedCandidate | null => {
+    const record = asPlainRecord(item);
+    const originalImageUrl = normalizeUrl(record.url);
+    if (!originalImageUrl) return null;
+    const meta = asPlainRecord(record.meta);
+    const width = getNumberField(record, "width");
+    const height = getNumberField(record, "height");
+    const prompt = getStringField(meta, "prompt") || getStringField(record, "name");
+    const resources = Array.isArray(record.resources) ? record.resources.map(asPlainRecord) : [];
+    const model = resources.map((resource) => getStringField(resource, "name")).filter(Boolean).join(", ") || getStringField(meta, "Model") || undefined;
+    return {
+      provider: "civitai",
+      sourceWorkId: getStringField(record, "id") || originalImageUrl,
+      sourcePageUrl: `https://civitai.com/images/${getStringField(record, "id")}`,
+      originalImageUrl,
+      displayUrl: originalImageUrl,
+      thumbnailUrl: normalizeUrl(record.thumbnailUrl) || undefined,
+      title: createCollectionTitle(prompt, "civitai"),
+      prompt,
+      negativePrompt: getStringField(meta, "negativePrompt") || undefined,
+      model,
+      width,
+      height,
+      nsfw: record.nsfw === true || record.nsfwLevel === "X" || record.nsfwLevel === "XXX",
+      tags: resources.map((resource) => getStringField(resource, "type")).filter(Boolean),
+      metadata: record,
+    };
+  }).filter((item): item is CollectedCandidate => Boolean(item));
+}
+
+async function collectCandidates(source: CollectionSource) {
+  if (source.provider === "lexica") return collectFromLexica(source.query, source.maxItemsPerRun);
+  return collectFromCivitai(source.query, source.maxItemsPerRun);
+}
+
+async function classifyCollectedCandidateWithVision(candidate: CollectedCandidate) {
+  const settings = getCollectionClassifierSettings();
+  if (!settings.enabled || !settings.modelId || !settings.provider) return null;
+  try {
+    const resolvedImageUrl = await resolveAgentImageUrl(candidate.displayUrl || candidate.originalImageUrl);
+    const payload = {
+      model: settings.modelId,
+      messages: [
+        { role: "system", content: settings.classificationPrompt },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: [
+                `prompt: ${candidate.prompt || ""}`,
+                `model: ${candidate.model || ""}`,
+                `tags: ${(candidate.tags ?? []).join(", ")}`,
+                `size: ${candidate.width || ""}x${candidate.height || ""}`,
+              ].join("\n"),
+            },
+            { type: "image_url", image_url: { url: resolvedImageUrl } },
+          ],
+        },
+      ],
+      temperature: 0,
+      max_tokens: 240,
+    };
+    const apiResponse = await fetch(buildEndpoint(settings.provider.baseUrl, "/chat/completions"), {
+      method: "POST",
+      headers: buildProviderHeaders(settings.provider, "application/json", "application/json"),
+      body: JSON.stringify(payload),
+    });
+    if (!apiResponse.ok) {
+      const text = await apiResponse.text();
+      throw new Error(`vision model failed: ${apiResponse.status} ${text.slice(0, 500)}`);
+    }
+    const data = await apiResponse.json();
+    return parseCollectionVisionClassification(extractAgentResponseContent(data));
+  } catch (error) {
+    console.warn("[collection] vision classification failed", {
+      provider: candidate.provider,
+      sourceWorkId: candidate.sourceWorkId,
+      error: getErrorMessage(error),
+    });
+    return null;
+  }
+}
+
+async function upsertCollectedCandidates(source: CollectionSource, candidates: CollectedCandidate[]) {
+  const now = Date.now();
+  let added = 0;
+  let skipped = 0;
+  const existingKeys = new Set(collectionLibrary.works.flatMap((work) => [
+    `${work.provider}:id:${work.sourceWorkId ?? ""}`,
+    `${work.provider}:url:${work.originalImageUrl}`,
+  ]));
+
+  for (const candidate of candidates) {
+    if (source.filterNsfw && candidate.nsfw) {
+      skipped += 1;
+      continue;
+    }
+    const sourceKey = `${candidate.provider}:id:${candidate.sourceWorkId ?? ""}`;
+    const urlKey = `${candidate.provider}:url:${candidate.originalImageUrl}`;
+    if (existingKeys.has(sourceKey) || existingKeys.has(urlKey)) {
+      skipped += 1;
+      continue;
+    }
+    const tags = [...new Set([...(candidate.tags ?? []), ...source.targetTags])].slice(0, 24);
+    const visionCategory = await classifyCollectedCandidateWithVision(candidate);
+    const category = visionCategory || classifyCollectionWork({
+      prompt: candidate.prompt,
+      model: candidate.model,
+      tags,
+      fallbackId: source.targetCategoryId,
+      fallbackName: source.targetCategoryName,
+    });
+    const status: CollectionWorkStatus = source.autoPublish ? "published" : "pending";
+    const work: CollectionWork = {
+      id: createId("cw"),
+      sourceId: source.id,
+      provider: candidate.provider,
+      sourceWorkId: candidate.sourceWorkId,
+      sourcePageUrl: candidate.sourcePageUrl,
+      originalImageUrl: candidate.originalImageUrl,
+      displayUrl: candidate.displayUrl || candidate.originalImageUrl,
+      thumbnailUrl: candidate.thumbnailUrl,
+      title: candidate.title || createCollectionTitle(candidate.prompt ?? "", candidate.provider),
+      prompt: candidate.prompt ?? "",
+      negativePrompt: candidate.negativePrompt,
+      model: candidate.model,
+      aspectRatio: inferAspectRatio(candidate.width, candidate.height),
+      width: candidate.width,
+      height: candidate.height,
+      categoryId: category.categoryId,
+      categoryName: category.categoryName,
+      tags: [...new Set([...tags, ...(visionCategory?.tags ?? [])])].slice(0, 24),
+      nsfw: candidate.nsfw === true,
+      qualityScore: computeCollectionScore({ width: candidate.width, height: candidate.height, nsfw: candidate.nsfw === true, collectedAt: now }),
+      recommendationScore: computeCollectionScore({ width: candidate.width, height: candidate.height, nsfw: candidate.nsfw === true, collectedAt: now }),
+      featured: false,
+      status,
+      failedCount: 0,
+      metadata: { ...(candidate.metadata ?? {}), visionCategory },
+      collectedAt: now,
+      publishedAt: status === "published" ? now : undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+    collectionLibrary.works.push(work);
+    existingKeys.add(sourceKey);
+    existingKeys.add(urlKey);
+    added += 1;
+  }
+
+  source.lastRunAt = now;
+  source.updatedAt = now;
+  return { added, skipped };
+}
+
+async function runCollectionSourceNow(source: CollectionSource) {
+  const run: CollectionRun = {
+    id: createId("cr"),
+    sourceId: source.id,
+    provider: source.provider,
+    query: source.query,
+    status: "running",
+    fetched: 0,
+    added: 0,
+    skipped: 0,
+    startedAt: Date.now(),
+  };
+  collectionLibrary.runs.unshift(run);
+  collectionLibrary.runs = collectionLibrary.runs.slice(0, 300);
+  void saveCollectionLibrarySoon();
+
+  try {
+    const candidates = await collectCandidates(source);
+    const result = await upsertCollectedCandidates(source, candidates);
+    run.status = "completed";
+    run.fetched = candidates.length;
+    run.added = result.added;
+    run.skipped = result.skipped;
+    run.finishedAt = Date.now();
+    void saveCollectionLibrarySoon();
+    return { ok: true as const, fetched: candidates.length, ...result, source, run };
+  } catch (error) {
+    run.status = "failed";
+    run.error = getErrorMessage(error);
+    run.finishedAt = Date.now();
+    void saveCollectionLibrarySoon();
+    throw error;
+  }
+}
+
+function processCollectionQueue() {
+  while (runningCollectionJobs < COLLECTION_QUEUE_CONCURRENCY && collectionJobQueue.length > 0) {
+    const job = collectionJobQueue.shift();
+    if (!job) return;
+    runningCollectionJobs += 1;
+    void runCollectionSourceNow(job.source)
+      .then(job.resolve)
+      .catch((error) => {
+        if (job.attemptsLeft > 0) {
+          const delayMs = (COLLECTION_QUEUE_RETRIES - job.attemptsLeft + 1) * 2000;
+          windowlessSetTimeout(() => {
+            collectionJobQueue.push({ ...job, attemptsLeft: job.attemptsLeft - 1 });
+            processCollectionQueue();
+          }, delayMs);
+          return;
+        }
+        job.reject(error);
+      })
+      .finally(() => {
+        runningCollectionJobs -= 1;
+        queuedCollectionSourceIds.delete(job.source.id);
+        processCollectionQueue();
+      });
+  }
+}
+
+function windowlessSetTimeout(callback: () => void, delayMs: number) {
+  setTimeout(callback, delayMs).unref?.();
+}
+
+function runCollectionSourceQueued(source: CollectionSource) {
+  if (queuedCollectionSourceIds.has(source.id)) {
+    return Promise.reject(new Error("source is already queued or running"));
+  }
+  queuedCollectionSourceIds.add(source.id);
+  return new Promise<Awaited<ReturnType<typeof runCollectionSourceNow>>>((resolve, reject) => {
+    collectionJobQueue.push({ source, attemptsLeft: COLLECTION_QUEUE_RETRIES, resolve, reject });
+    processCollectionQueue();
+  });
+}
+
+app.get("/api/collection/sources", (_request, response) => {
+  response.json({ sources: collectionLibrary.sources });
+});
+
+app.get("/api/collection/runs", (request, response) => {
+  const sourceId = typeof request.query.sourceId === "string" ? request.query.sourceId : undefined;
+  const limitValue = Number.parseInt(typeof request.query.limit === "string" ? request.query.limit : "30", 10);
+  const limit = Math.max(1, Math.min(100, Number.isFinite(limitValue) ? limitValue : 30));
+  const runs = collectionLibrary.runs
+    .filter((run) => !sourceId || run.sourceId === sourceId)
+    .sort((a, b) => b.startedAt - a.startedAt)
+    .slice(0, limit);
+  response.json({ runs });
+});
+
+app.post("/api/collection/sources", (request, response) => {
+  const body = asPlainRecord(request.body);
+  const provider = normalizeCollectionProvider(body.provider);
+  const query = getStringField(body, "query");
+  if (!provider || !query) {
+    response.status(400).json({ error: "provider and query are required" });
+    return;
+  }
+  const now = Date.now();
+  const source: CollectionSource = {
+    id: createId("cs"),
+    provider,
+    name: getStringField(body, "name") || `${provider} ${query}`,
+    query,
+    enabled: body.enabled !== false,
+    targetCategoryId: getStringField(body, "targetCategoryId") || undefined,
+    targetCategoryName: getStringField(body, "targetCategoryName") || undefined,
+    targetTags: normalizeStringArray(body.targetTags),
+    autoPublish: body.autoPublish === true,
+    filterNsfw: body.filterNsfw !== false,
+    maxItemsPerRun: Math.max(1, Math.min(200, Math.round(getNumberField(body, "maxItemsPerRun") ?? 50))),
+    scheduleEveryHours: getNumberField(body, "scheduleEveryHours"),
+    createdAt: now,
+    updatedAt: now,
+  };
+  collectionLibrary.sources.push(source);
+  void saveCollectionLibrarySoon();
+  response.status(201).json({ source });
+});
+
+app.patch("/api/collection/sources/:id", (request, response) => {
+  const source = collectionLibrary.sources.find((item) => item.id === request.params.id);
+  if (!source) {
+    response.status(404).json({ error: "source not found" });
+    return;
+  }
+  const body = asPlainRecord(request.body);
+  const provider = body.provider === undefined ? source.provider : normalizeCollectionProvider(body.provider);
+  if (!provider) {
+    response.status(400).json({ error: "invalid provider" });
+    return;
+  }
+  source.provider = provider;
+  if (body.name !== undefined) source.name = getStringField(body, "name") || source.name;
+  if (body.query !== undefined) source.query = getStringField(body, "query") || source.query;
+  if (body.enabled !== undefined) source.enabled = body.enabled !== false;
+  if (body.targetCategoryId !== undefined) source.targetCategoryId = getStringField(body, "targetCategoryId") || undefined;
+  if (body.targetCategoryName !== undefined) source.targetCategoryName = getStringField(body, "targetCategoryName") || undefined;
+  if (body.targetTags !== undefined) source.targetTags = normalizeStringArray(body.targetTags);
+  if (body.autoPublish !== undefined) source.autoPublish = body.autoPublish === true;
+  if (body.filterNsfw !== undefined) source.filterNsfw = body.filterNsfw !== false;
+  if (body.maxItemsPerRun !== undefined) source.maxItemsPerRun = Math.max(1, Math.min(200, Math.round(getNumberField(body, "maxItemsPerRun") ?? source.maxItemsPerRun)));
+  if (body.scheduleEveryHours !== undefined) {
+    const next = getNumberField(body, "scheduleEveryHours");
+    source.scheduleEveryHours = next && next > 0 ? Math.max(1, Math.min(24 * 30, next)) : undefined;
+  }
+  source.updatedAt = Date.now();
+  void saveCollectionLibrarySoon();
+  response.json({ source });
+});
+
+app.delete("/api/collection/sources/:id", (request, response) => {
+  const before = collectionLibrary.sources.length;
+  collectionLibrary.sources = collectionLibrary.sources.filter((source) => source.id !== request.params.id);
+  if (isPostgresEnabled()) {
+    void queryPostgres("update collection_sources set deleted_at = now(), updated_at = now() where id = $1", [request.params.id]).catch(() => undefined);
+  }
+  void saveCollectionLibrarySoon();
+  response.json({ ok: true, deleted: before !== collectionLibrary.sources.length });
+});
+
+app.post("/api/collection/sources/:id/run", async (request, response) => {
+  const source = collectionLibrary.sources.find((item) => item.id === request.params.id);
+  if (!source) {
+    response.status(404).json({ error: "source not found" });
+    return;
+  }
+  if (!source.enabled) {
+    response.status(400).json({ error: "source is disabled" });
+    return;
+  }
+  try {
+    const result = await runCollectionSourceQueued(source);
+    response.json(result);
+  } catch (error) {
+    response.status(502).json({ error: getErrorMessage(error) });
+  }
+});
+
+app.post("/api/collection/run-enabled", async (_request, response) => {
+  const sources = collectionLibrary.sources.filter((source) => source.enabled);
+  const results: Array<{ sourceId: string; ok: boolean; fetched?: number; added?: number; skipped?: number; error?: string }> = [];
+  for (const source of sources) {
+    try {
+      const result = await runCollectionSourceQueued(source);
+      results.push({ sourceId: source.id, ok: true, fetched: result.fetched, added: result.added, skipped: result.skipped });
+    } catch (error) {
+      results.push({ sourceId: source.id, ok: false, error: getErrorMessage(error) });
+    }
+  }
+  response.json({ ok: true, results });
+});
+
+app.get("/api/collection/works", (request, response) => {
+  const status = typeof request.query.status === "string" ? request.query.status : undefined;
+  const categoryId = typeof request.query.categoryId === "string" ? request.query.categoryId : undefined;
+  const cursor = typeof request.query.cursor === "string" ? request.query.cursor : undefined;
+  const limitValue = Number.parseInt(typeof request.query.limit === "string" ? request.query.limit : "30", 10);
+  const limit = Math.max(1, Math.min(60, Number.isFinite(limitValue) ? limitValue : 30));
+  const includeNsfw = request.query.includeNsfw === "1";
+  const filtered = filterCollectionWorks({ status, categoryId, includeNsfw });
+  const page = paginateCollectionWorks(filtered, cursor, limit);
+  response.json({
+    items: page.items.map(getCollectionPublicWork),
+    nextCursor: page.nextCursor,
+    hasMore: page.hasMore,
+  });
+});
+
+app.get("/api/collection/works/:id", (request, response) => {
+  const work = collectionLibrary.works.find((item) => item.id === request.params.id);
+  if (!work || work.status === "broken" || work.status === "rejected") {
+    response.status(404).json({ error: "work not found" });
+    return;
+  }
+  response.json({ work: getCollectionPublicWork(work) });
+});
+
+app.get("/api/collection/works/:id/related", (request, response) => {
+  const work = collectionLibrary.works.find((item) => item.id === request.params.id);
+  if (!work || work.status === "broken" || work.status === "rejected") {
+    response.status(404).json({ error: "work not found" });
+    return;
+  }
+
+  const limitValue = Number.parseInt(typeof request.query.limit === "string" ? request.query.limit : "8", 10);
+  const limit = Math.max(1, Math.min(12, Number.isFinite(limitValue) ? limitValue : 8));
+  const tags = new Set(work.tags.map((tag) => tag.toLowerCase()));
+
+  const related = collectionLibrary.works
+    .filter((item) => item.id !== work.id)
+    .filter((item) => item.status === "published" && !item.nsfw)
+    .map((item) => {
+      const sharedTags = item.tags.reduce((count, tag) => count + (tags.has(tag.toLowerCase()) ? 1 : 0), 0);
+      const categoryMatch = item.categoryId === work.categoryId ? 3 : 0;
+      return { item, score: categoryMatch + sharedTags };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      return compareCollectionWorks(left.item, right.item);
+    })
+    .slice(0, limit)
+    .map((entry) => getCollectionPublicWork(entry.item));
+
+  response.json({ items: related });
+});
+
+app.patch("/api/collection/works/:id", (request, response) => {
+  const work = collectionLibrary.works.find((item) => item.id === request.params.id);
+  if (!work) {
+    response.status(404).json({ error: "work not found" });
+    return;
+  }
+  const body = asPlainRecord(request.body);
+  if (body.title !== undefined) work.title = getStringField(body, "title") || work.title;
+  if (body.prompt !== undefined) work.prompt = getStringField(body, "prompt");
+  if (body.negativePrompt !== undefined) work.negativePrompt = getStringField(body, "negativePrompt") || undefined;
+  if (body.model !== undefined) work.model = getStringField(body, "model") || undefined;
+  if (body.categoryId !== undefined) work.categoryId = getStringField(body, "categoryId") || work.categoryId;
+  if (body.categoryName !== undefined) work.categoryName = getStringField(body, "categoryName") || work.categoryName;
+  if (body.tags !== undefined) work.tags = normalizeStringArray(body.tags);
+  if (body.displayUrl !== undefined) work.displayUrl = normalizeUrl(body.displayUrl) || work.displayUrl;
+  if (body.thumbnailUrl !== undefined) work.thumbnailUrl = normalizeUrl(body.thumbnailUrl) || undefined;
+  if (body.sourcePageUrl !== undefined) work.sourcePageUrl = normalizeUrl(body.sourcePageUrl) || undefined;
+  if (body.featured !== undefined) {
+    const nextFeatured = body.featured === true;
+    work.featured = nextFeatured;
+    work.featuredAt = nextFeatured ? Date.now() : undefined;
+  }
+  work.updatedAt = Date.now();
+  void saveCollectionLibrarySoon();
+  response.json({ work: getCollectionPublicWork(work) });
+});
+
+app.post("/api/collection/works/batch", (request, response) => {
+  const body = asPlainRecord(request.body);
+  const ids = normalizeStringArray(body.ids, []).slice(0, 200);
+  const action = getStringField(body, "action");
+  if (ids.length === 0 || !["publish", "reject", "delete"].includes(action)) {
+    response.status(400).json({ error: "ids and action are required" });
+    return;
+  }
+  const idSet = new Set(ids);
+  const now = Date.now();
+  let affected = 0;
+  if (action === "delete") {
+    const before = collectionLibrary.works.length;
+    collectionLibrary.works = collectionLibrary.works.filter((work) => !idSet.has(work.id));
+    affected = before - collectionLibrary.works.length;
+    if (isPostgresEnabled()) {
+      void queryPostgres("update collection_works set deleted_at = now(), updated_at = now() where id = any($1::text[])", [ids]).catch(() => undefined);
+    }
+  } else {
+    for (const work of collectionLibrary.works) {
+      if (!idSet.has(work.id)) continue;
+      work.status = action === "publish" ? "published" : "rejected";
+      if (action === "publish") work.publishedAt = work.publishedAt ?? now;
+      work.updatedAt = now;
+      affected += 1;
+    }
+  }
+  void saveCollectionLibrarySoon();
+  response.json({ ok: true, affected });
+});
+
+app.post("/api/collection/works/:id/publish", (request, response) => {
+  const work = collectionLibrary.works.find((item) => item.id === request.params.id);
+  if (!work) {
+    response.status(404).json({ error: "work not found" });
+    return;
+  }
+  const now = Date.now();
+  work.status = "published";
+  work.publishedAt = work.publishedAt ?? now;
+  work.updatedAt = now;
+  void saveCollectionLibrarySoon();
+  response.json({ work: getCollectionPublicWork(work) });
+});
+
+app.post("/api/collection/works/:id/reject", (request, response) => {
+  const work = collectionLibrary.works.find((item) => item.id === request.params.id);
+  if (!work) {
+    response.status(404).json({ error: "work not found" });
+    return;
+  }
+  work.status = "rejected";
+  work.updatedAt = Date.now();
+  void saveCollectionLibrarySoon();
+  response.json({ work: getCollectionPublicWork(work) });
+});
+
+app.post("/api/collection/works/:id/broken", (request, response) => {
+  const work = collectionLibrary.works.find((item) => item.id === request.params.id);
+  if (!work) {
+    response.json({ ok: true, missing: true });
+    return;
+  }
+  work.failedCount += 1;
+  work.lastFailedAt = Date.now();
+  if (work.failedCount >= 2) work.status = "broken";
+  work.updatedAt = Date.now();
+  void saveCollectionLibrarySoon();
+  response.json({ ok: true, work: getCollectionPublicWork(work) });
+});
+
+app.delete("/api/collection/works/:id", (request, response) => {
+  const before = collectionLibrary.works.length;
+  collectionLibrary.works = collectionLibrary.works.filter((work) => work.id !== request.params.id);
+  if (isPostgresEnabled()) {
+    void queryPostgres("update collection_works set deleted_at = now(), updated_at = now() where id = $1", [request.params.id]).catch(() => undefined);
+  }
+  void saveCollectionLibrarySoon();
+  response.json({ ok: true, deleted: before !== collectionLibrary.works.length });
+});
+
+app.get("/api/feed/home", (request, response) => {
+  const categoryId = typeof request.query.categoryId === "string" ? request.query.categoryId : undefined;
+  const cursor = typeof request.query.cursor === "string" ? request.query.cursor : undefined;
+  const limitValue = Number.parseInt(typeof request.query.limit === "string" ? request.query.limit : "30", 10);
+  const limit = Math.max(1, Math.min(60, Number.isFinite(limitValue) ? limitValue : 30));
+  const filtered = filterCollectionWorks({ status: "published", categoryId, includeNsfw: false });
+  const page = paginateCollectionWorks(filtered, cursor, limit);
+  response.json({
+    items: page.items.map(getCollectionPublicWork),
+    nextCursor: page.nextCursor,
+    hasMore: page.hasMore,
+  });
 });
 
 app.post("/api/reference-classify", async (request, response) => {
@@ -1545,6 +2315,279 @@ async function streamAgentUpstreamResponse(apiResponse: Response, response: expr
 
 function createId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+}
+
+function asPlainRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function getStringField(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getNumberField(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function normalizeUrl(value: unknown) {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  return /^https?:\/\//i.test(trimmed) ? trimmed : "";
+}
+
+function normalizeCollectionProvider(value: unknown): CollectionProvider | null {
+  return value === "civitai" || value === "lexica" ? value : null;
+}
+
+function normalizeStringArray(value: unknown, fallback: string[] = []) {
+  if (!Array.isArray(value)) return fallback;
+  return value
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean)
+    .slice(0, 24);
+}
+
+function inferAspectRatio(width?: number, height?: number) {
+  if (!width || !height || width <= 0 || height <= 0) return "auto";
+  const ratio = width / height;
+  if (Math.abs(ratio - 1) < 0.08) return "1:1";
+  if (Math.abs(ratio - 16 / 9) < 0.12) return "16:9";
+  if (Math.abs(ratio - 9 / 16) < 0.12) return "9:16";
+  if (Math.abs(ratio - 4 / 3) < 0.1) return "4:3";
+  if (Math.abs(ratio - 3 / 4) < 0.1) return "3:4";
+  return width > height ? "landscape" : "portrait";
+}
+
+const COLLECTION_CATEGORY_RULES: Array<{ id: string; name: string; keywords: string[] }> = [
+  { id: "portrait", name: "人像", keywords: ["portrait", "photo", "woman", "man", "face", "headshot", "fashion", "beauty", "girl", "boy"] },
+  { id: "character", name: "角色", keywords: ["character", "game character", "mascot", "avatar", "chibi", "hero", "villain"] },
+  { id: "scene", name: "场景", keywords: ["landscape", "interior", "architecture", "city", "room", "forest", "mountain", "street", "environment"] },
+  { id: "product", name: "产品", keywords: ["product", "packaging", "sneaker", "bottle", "perfume", "furniture", "device", "watch", "bag"] },
+  { id: "poster", name: "海报", keywords: ["poster", "cover", "typography", "movie poster", "advertising", "banner"] },
+  { id: "illustration", name: "插画", keywords: ["illustration", "children's book", "flat", "hand drawn", "concept art", "storybook"] },
+  { id: "style", name: "风格", keywords: ["watercolor", "pixel art", "clay", "low poly", "cyberpunk", "cinematic", "minimal", "film", "retro"] },
+  { id: "anime", name: "二次元", keywords: ["anime", "manga", "cel shading", "waifu", "japanese animation", "kawaii"] },
+  { id: "cg", name: "3D/CG", keywords: ["3d", "cgi", "render", "octane", "blender", "unreal engine", "zbrush"] },
+  { id: "chinese", name: "国风", keywords: ["chinese", "hanfu", "ink", "wuxia", "guofeng", "oriental", "xianxia"] },
+];
+
+function classifyCollectionWork(input: { prompt?: string; model?: string; tags?: string[]; fallbackId?: string; fallbackName?: string }) {
+  if (input.fallbackId || input.fallbackName) {
+    return { categoryId: input.fallbackId || "recommended", categoryName: input.fallbackName || "推荐" };
+  }
+  const haystack = `${input.prompt ?? ""} ${input.model ?? ""} ${(input.tags ?? []).join(" ")}`.toLowerCase();
+  const matched = COLLECTION_CATEGORY_RULES.find((rule) => rule.keywords.some((keyword) => haystack.includes(keyword)));
+  return matched ? { categoryId: matched.id, categoryName: matched.name } : { categoryId: "style", categoryName: "风格" };
+}
+
+function createCollectionTitle(prompt: string, provider: CollectionProvider) {
+  const firstLine = prompt.split(/\r?\n/, 1)[0]?.trim().replace(/\s+/g, " ") || "";
+  if (firstLine) return Array.from(firstLine).slice(0, 28).join("");
+  return provider === "civitai" ? "Civitai 采集作品" : "Lexica 采集作品";
+}
+
+function computeCollectionScore(input: { width?: number; height?: number; nsfw: boolean; collectedAt: number; failedCount?: number }) {
+  const pixels = (input.width ?? 0) * (input.height ?? 0);
+  const quality = Math.min(40, Math.round(pixels / 120000));
+  const freshHours = Math.max(0, (Date.now() - input.collectedAt) / 1000 / 60 / 60);
+  const freshness = Math.max(0, 40 - freshHours / 6);
+  return Math.round((quality + freshness + (input.nsfw ? -80 : 20) - (input.failedCount ?? 0) * 30) * 100) / 100;
+}
+
+function normalizeCollectionLibraryFromFile(value: unknown): CollectionLibrary {
+  const raw = asPlainRecord(value);
+  const sources = Array.isArray(raw.sources) ? raw.sources.map((item): CollectionSource | null => {
+    const record = asPlainRecord(item);
+    const provider = normalizeCollectionProvider(record.provider);
+    const id = getStringField(record, "id");
+    const query = getStringField(record, "query");
+    if (!provider || !id || !query) return null;
+    const now = Date.now();
+    return {
+      id,
+      provider,
+      name: getStringField(record, "name") || `${provider} ${query}`,
+      query,
+      enabled: record.enabled !== false,
+      targetCategoryId: getStringField(record, "targetCategoryId") || undefined,
+      targetCategoryName: getStringField(record, "targetCategoryName") || undefined,
+      targetTags: normalizeStringArray(record.targetTags),
+      autoPublish: record.autoPublish === true,
+      filterNsfw: record.filterNsfw !== false,
+      maxItemsPerRun: Math.max(1, Math.min(200, Math.round(getNumberField(record, "maxItemsPerRun") ?? 50))),
+      scheduleEveryHours: getNumberField(record, "scheduleEveryHours"),
+      lastRunAt: getNumberField(record, "lastRunAt"),
+      createdAt: getNumberField(record, "createdAt") ?? now,
+      updatedAt: getNumberField(record, "updatedAt") ?? now,
+    };
+  }).filter((item): item is CollectionSource => Boolean(item)) : [];
+
+  const works = Array.isArray(raw.works) ? raw.works.map((item): CollectionWork | null => {
+    const record = asPlainRecord(item);
+    const provider = normalizeCollectionProvider(record.provider);
+    const id = getStringField(record, "id");
+    const originalImageUrl = normalizeUrl(record.originalImageUrl);
+    const displayUrl = normalizeUrl(record.displayUrl) || originalImageUrl;
+    if (!provider || !id || !displayUrl) return null;
+    const now = Date.now();
+    const width = getNumberField(record, "width");
+    const height = getNumberField(record, "height");
+    const collectedAt = getNumberField(record, "collectedAt") ?? now;
+    const nsfw = record.nsfw === true;
+    const failedCount = Math.max(0, Math.round(getNumberField(record, "failedCount") ?? 0));
+    const statusValue = getStringField(record, "status");
+    const status: CollectionWorkStatus = statusValue === "pending" || statusValue === "published" || statusValue === "rejected" || statusValue === "broken" ? statusValue : "pending";
+    return {
+      id,
+      sourceId: getStringField(record, "sourceId") || undefined,
+      provider,
+      sourceWorkId: getStringField(record, "sourceWorkId") || undefined,
+      sourcePageUrl: normalizeUrl(record.sourcePageUrl) || undefined,
+      originalImageUrl: originalImageUrl || displayUrl,
+      displayUrl,
+      thumbnailUrl: normalizeUrl(record.thumbnailUrl) || undefined,
+      title: getStringField(record, "title") || createCollectionTitle(getStringField(record, "prompt"), provider),
+      prompt: getStringField(record, "prompt"),
+      negativePrompt: getStringField(record, "negativePrompt") || undefined,
+      model: getStringField(record, "model") || undefined,
+      aspectRatio: getStringField(record, "aspectRatio") || inferAspectRatio(width, height),
+      width,
+      height,
+      categoryId: getStringField(record, "categoryId") || "style",
+      categoryName: getStringField(record, "categoryName") || "风格",
+      tags: normalizeStringArray(record.tags),
+      nsfw,
+      qualityScore: getNumberField(record, "qualityScore") ?? 0,
+      recommendationScore: getNumberField(record, "recommendationScore") ?? computeCollectionScore({ width, height, nsfw, collectedAt, failedCount }),
+      featured: record.featured === true,
+      featuredAt: getNumberField(record, "featuredAt"),
+      status,
+      failedCount,
+      lastFailedAt: getNumberField(record, "lastFailedAt"),
+      metadata: asPlainRecord(record.metadata),
+      collectedAt,
+      publishedAt: getNumberField(record, "publishedAt"),
+      createdAt: getNumberField(record, "createdAt") ?? collectedAt,
+      updatedAt: getNumberField(record, "updatedAt") ?? now,
+    };
+  }).filter((item): item is CollectionWork => Boolean(item)) : [];
+
+  const runs = Array.isArray(raw.runs) ? raw.runs.map((item): CollectionRun | null => {
+    const record = asPlainRecord(item);
+    const provider = normalizeCollectionProvider(record.provider);
+    const id = getStringField(record, "id");
+    const sourceId = getStringField(record, "sourceId");
+    const statusValue = getStringField(record, "status");
+    const status: CollectionRun["status"] = statusValue === "running" || statusValue === "completed" || statusValue === "failed" ? statusValue : "completed";
+    if (!provider || !id || !sourceId) return null;
+    return {
+      id,
+      sourceId,
+      provider,
+      query: getStringField(record, "query"),
+      status,
+      fetched: Math.max(0, Math.round(getNumberField(record, "fetched") ?? 0)),
+      added: Math.max(0, Math.round(getNumberField(record, "added") ?? 0)),
+      skipped: Math.max(0, Math.round(getNumberField(record, "skipped") ?? 0)),
+      error: getStringField(record, "error") || undefined,
+      startedAt: getNumberField(record, "startedAt") ?? Date.now(),
+      finishedAt: getNumberField(record, "finishedAt"),
+    };
+  }).filter((item): item is CollectionRun => Boolean(item)) : [];
+
+  return { sources, works, runs };
+}
+
+async function loadCollectionLibraryFromPostgres() {
+  if (!isPostgresEnabled()) return null;
+  try {
+    const [sourcesResult, worksResult, runsResult] = await Promise.all([
+      queryPostgres<{ raw_source: unknown }>("select raw_source from collection_sources where deleted_at is null order by created_at asc"),
+      queryPostgres<{ raw_work: unknown }>("select to_jsonb(collection_works.*) as raw_work from collection_works where deleted_at is null order by collected_at desc"),
+      queryPostgres<{ raw_run: unknown }>("select raw_run from collection_runs order by started_at desc limit 300"),
+    ]);
+    return normalizeCollectionLibraryFromFile({
+      sources: sourcesResult.rows.map((row) => row.raw_source).filter(Boolean),
+      works: worksResult.rows.map((row) => {
+        const record = asPlainRecord(row.raw_work);
+        return {
+          ...record,
+          sourceId: getStringField(record, "source_id"),
+          sourceWorkId: getStringField(record, "source_work_id"),
+          sourcePageUrl: getStringField(record, "source_page_url"),
+          originalImageUrl: getStringField(record, "original_image_url"),
+          displayUrl: getStringField(record, "display_url"),
+          thumbnailUrl: getStringField(record, "thumbnail_url"),
+          negativePrompt: getStringField(record, "negative_prompt"),
+          aspectRatio: getStringField(record, "aspect_ratio"),
+          categoryId: getStringField(record, "category_id"),
+          categoryName: getStringField(record, "category_name"),
+          qualityScore: getNumberField(record, "quality_score"),
+          recommendationScore: getNumberField(record, "recommendation_score"),
+          featuredAt: record.featured_at ? new Date(String(record.featured_at)).getTime() : undefined,
+          failedCount: getNumberField(record, "failed_count"),
+          lastFailedAt: record.last_failed_at ? new Date(String(record.last_failed_at)).getTime() : undefined,
+          collectedAt: record.collected_at ? new Date(String(record.collected_at)).getTime() : undefined,
+          publishedAt: record.published_at ? new Date(String(record.published_at)).getTime() : undefined,
+          createdAt: record.created_at ? new Date(String(record.created_at)).getTime() : undefined,
+          updatedAt: record.updated_at ? new Date(String(record.updated_at)).getTime() : undefined,
+        };
+      }),
+      runs: runsResult.rows.map((row) => row.raw_run).filter(Boolean),
+    });
+  } catch (error) {
+    console.warn("[collection-library] postgres load skipped", getErrorMessage(error));
+    return null;
+  }
+}
+
+function getErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  const cause = error instanceof Error && "cause" in error ? (error as { cause?: unknown }).cause : undefined;
+  if (cause instanceof Error) return `${message}: ${cause.message}`;
+  if (cause && typeof cause === "object" && "message" in cause) return `${message}: ${String((cause as { message?: unknown }).message)}`;
+  return message;
+}
+
+async function fetchJsonWithPowerShellFallback(targetUrl: string) {
+  try {
+    const upstreamResponse = await fetch(targetUrl, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "KoalaAI-Collector/1.0",
+      },
+    });
+    if (!upstreamResponse.ok) throw new Error(`request failed: ${upstreamResponse.status}`);
+    return await upstreamResponse.json() as unknown;
+  } catch (fetchError) {
+    if (process.platform !== "win32") throw fetchError;
+    try {
+      const escapedUrl = targetUrl.replace(/'/g, "''");
+      const script = [
+        "$ProgressPreference='SilentlyContinue'",
+        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+        `$url = '${escapedUrl}'`,
+        "$headers = @{ Accept = 'application/json'; 'User-Agent' = 'KoalaAI-Collector/1.0' }",
+        "$response = Invoke-WebRequest -UseBasicParsing -Uri $url -Headers $headers -TimeoutSec 30",
+        "$response.Content",
+      ].join("; ");
+      const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], {
+        maxBuffer: 20 * 1024 * 1024,
+        timeout: 45000,
+        windowsHide: true,
+      });
+      return JSON.parse(stdout) as unknown;
+    } catch (fallbackError) {
+      throw new Error(`fetch failed (${getErrorMessage(fetchError)}); PowerShell fallback failed (${getErrorMessage(fallbackError)})`);
+    }
+  }
 }
 
 function sanitizeText(value: string, maxLength = 2000) {
@@ -3085,6 +4128,68 @@ function getReferenceSettings() {
   }
 }
 
+function normalizeCollectionClassifierSettings(input: unknown): CollectionClassifierSettings {
+  const raw = asPlainRecord(input);
+  const provider = normalizeProviderRequest(raw.provider);
+  const modelId = getStringField(raw, "modelId");
+  return {
+    enabled: raw.enabled === true,
+    visionModelValue: getStringField(raw, "visionModelValue"),
+    modelId,
+    provider: provider || undefined,
+    classificationPrompt: getStringField(raw, "classificationPrompt") || DEFAULT_COLLECTION_CLASSIFIER_SETTINGS.classificationPrompt,
+  };
+}
+
+function getCollectionClassifierSettings() {
+  const saved = appState.get(COLLECTION_CLASSIFIER_SETTINGS_KEY);
+  if (!saved) return collectionClassifierSettings;
+  try {
+    return normalizeCollectionClassifierSettings(JSON.parse(saved));
+  } catch {
+    return collectionClassifierSettings;
+  }
+}
+
+function normalizeCollectionCategoryId(value: unknown) {
+  const id = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return ["portrait", "character", "scene", "product", "poster", "illustration", "style", "anime", "cg", "chinese"].includes(id) ? id : "";
+}
+
+function getCategoryNameById(id: string) {
+  const names: Record<string, string> = {
+    portrait: "人像",
+    character: "角色",
+    scene: "场景",
+    product: "产品",
+    poster: "海报",
+    illustration: "插画",
+    style: "风格",
+    anime: "二次元",
+    cg: "3D/CG",
+    chinese: "国风",
+  };
+  return names[id] || "风格";
+}
+
+function parseCollectionVisionClassification(content: string) {
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  try {
+    const raw = asPlainRecord(JSON.parse(jsonMatch?.[0] ?? content));
+    const categoryId = normalizeCollectionCategoryId(raw.categoryId);
+    const confidence = Math.max(0, Math.min(1, getNumberField(raw, "confidence") ?? 0.5));
+    if (!categoryId) return null;
+    return {
+      categoryId,
+      categoryName: getStringField(raw, "categoryName") || getCategoryNameById(categoryId),
+      tags: normalizeStringArray(raw.tags).slice(0, 12),
+      confidence,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function parseReferenceClassification(content: string) {
   const fallback = { role: "general" as ReferenceRole, confidence: 0 };
   const jsonMatch = content.match(/\{[\s\S]*\}/);
@@ -3369,6 +4474,21 @@ async function ensureDataFiles() {
     styleLibrary = DEFAULT_STYLE_LIBRARY;
     await writeFile(STYLE_LIBRARY_FILE, JSON.stringify(styleLibrary, null, 2), "utf8");
   }
+
+  const postgresCollectionLibrary = process.env.DB_READ_PRIMARY === "postgres" ? await loadCollectionLibraryFromPostgres() : null;
+  if (postgresCollectionLibrary) {
+    collectionLibrary = postgresCollectionLibrary;
+  } else {
+    try {
+      const raw = await readFile(COLLECTION_LIBRARY_FILE, "utf8");
+      collectionLibrary = normalizeCollectionLibraryFromFile(JSON.parse(raw));
+    } catch {
+      collectionLibrary = { sources: [], works: [], runs: [] };
+      await writeFile(COLLECTION_LIBRARY_FILE, JSON.stringify(collectionLibrary, null, 2), "utf8");
+    }
+  }
+
+  collectionClassifierSettings = getCollectionClassifierSettings();
 }
 
 function sleep(ms: number) {
@@ -3487,6 +4607,194 @@ function saveStyleLibrarySoon() {
     console.error("[style-library] failed to save library", error);
   });
   return styleLibrarySaveChain;
+}
+
+function saveCollectionLibrarySoon() {
+  collectionLibrarySaveChain = collectionLibrarySaveChain.then(async () => {
+    await writeJsonFileAtomically(COLLECTION_LIBRARY_FILE, collectionLibrary, "collection-library");
+    await saveConfigDocumentToPostgres("collection-library", collectionLibrary);
+    await saveCollectionLibraryToPostgres();
+  }).catch((error) => {
+    console.error("[collection-library] failed to save library", error);
+  });
+  return collectionLibrarySaveChain;
+}
+
+function dateOrNull(value: number | undefined) {
+  return typeof value === "number" && Number.isFinite(value) ? new Date(value) : null;
+}
+
+async function saveCollectionLibraryToPostgres() {
+  if (!isPostgresEnabled()) return;
+  try {
+    for (const source of collectionLibrary.sources) {
+      await queryPostgres(
+        `insert into collection_sources
+          (id, provider, name, query, enabled, target_category_id, target_category_name, target_tags, auto_publish, filter_nsfw, max_items_per_run, schedule_every_hours, last_run_at, raw_source, created_at, updated_at, deleted_at)
+         values
+          ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13, $14::jsonb, $15, $16, null)
+         on conflict (id) do update set
+          provider = excluded.provider,
+          name = excluded.name,
+          query = excluded.query,
+          enabled = excluded.enabled,
+          target_category_id = excluded.target_category_id,
+          target_category_name = excluded.target_category_name,
+          target_tags = excluded.target_tags,
+          auto_publish = excluded.auto_publish,
+          filter_nsfw = excluded.filter_nsfw,
+          max_items_per_run = excluded.max_items_per_run,
+          schedule_every_hours = excluded.schedule_every_hours,
+          last_run_at = excluded.last_run_at,
+          raw_source = excluded.raw_source,
+          updated_at = excluded.updated_at,
+          deleted_at = null`,
+        [
+          source.id,
+          source.provider,
+          source.name,
+          source.query,
+          source.enabled,
+          source.targetCategoryId ?? null,
+          source.targetCategoryName ?? null,
+          JSON.stringify(source.targetTags),
+          source.autoPublish,
+          source.filterNsfw,
+          source.maxItemsPerRun,
+          source.scheduleEveryHours ?? null,
+          dateOrNull(source.lastRunAt),
+          JSON.stringify(source),
+          dateOrNull(source.createdAt) ?? new Date(),
+          dateOrNull(source.updatedAt) ?? new Date(),
+        ],
+      );
+    }
+
+    for (const work of collectionLibrary.works) {
+      await queryPostgres(
+        `insert into collection_works
+          (id, source_id, provider, source_work_id, source_page_url, original_image_url, display_url, thumbnail_url, title, prompt, negative_prompt, model, aspect_ratio, width, height, category_id, category_name, tags, nsfw, quality_score, recommendation_score, featured, featured_at, status, failed_count, last_failed_at, metadata, collected_at, published_at, created_at, updated_at, deleted_at)
+         values
+          ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18::jsonb, $19, $20, $21, $22, $23, $24, $25, $26, $27::jsonb, $28, $29, $30, $31, null)
+         on conflict (id) do update set
+          source_id = excluded.source_id,
+          provider = excluded.provider,
+          source_work_id = excluded.source_work_id,
+          source_page_url = excluded.source_page_url,
+          original_image_url = excluded.original_image_url,
+          display_url = excluded.display_url,
+          thumbnail_url = excluded.thumbnail_url,
+          title = excluded.title,
+          prompt = excluded.prompt,
+          negative_prompt = excluded.negative_prompt,
+          model = excluded.model,
+          aspect_ratio = excluded.aspect_ratio,
+          width = excluded.width,
+          height = excluded.height,
+          category_id = excluded.category_id,
+          category_name = excluded.category_name,
+          tags = excluded.tags,
+          nsfw = excluded.nsfw,
+          quality_score = excluded.quality_score,
+          recommendation_score = excluded.recommendation_score,
+          featured = excluded.featured,
+          featured_at = excluded.featured_at,
+          status = excluded.status,
+          failed_count = excluded.failed_count,
+          last_failed_at = excluded.last_failed_at,
+          metadata = excluded.metadata,
+          published_at = excluded.published_at,
+          updated_at = excluded.updated_at,
+          deleted_at = null`,
+        [
+          work.id,
+          work.sourceId ?? null,
+          work.provider,
+          work.sourceWorkId ?? null,
+          work.sourcePageUrl ?? null,
+          work.originalImageUrl,
+          work.displayUrl,
+          work.thumbnailUrl ?? null,
+          work.title,
+          work.prompt,
+          work.negativePrompt ?? null,
+          work.model ?? null,
+          work.aspectRatio,
+          work.width ?? null,
+          work.height ?? null,
+          work.categoryId,
+          work.categoryName,
+          JSON.stringify(work.tags),
+          work.nsfw,
+          work.qualityScore,
+          work.recommendationScore,
+          work.featured,
+          dateOrNull(work.featuredAt),
+          work.status,
+          work.failedCount,
+          dateOrNull(work.lastFailedAt),
+          JSON.stringify(work.metadata),
+          dateOrNull(work.collectedAt) ?? new Date(),
+          dateOrNull(work.publishedAt),
+          dateOrNull(work.createdAt) ?? new Date(),
+          dateOrNull(work.updatedAt) ?? new Date(),
+        ],
+      );
+    }
+
+    for (const run of collectionLibrary.runs.slice(0, 300)) {
+      await queryPostgres(
+        `insert into collection_runs
+          (id, source_id, provider, query, status, fetched, added, skipped, error, raw_run, started_at, finished_at)
+         values
+          ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12)
+         on conflict (id) do update set
+          status = excluded.status,
+          fetched = excluded.fetched,
+          added = excluded.added,
+          skipped = excluded.skipped,
+          error = excluded.error,
+          raw_run = excluded.raw_run,
+          finished_at = excluded.finished_at`,
+        [
+          run.id,
+          run.sourceId,
+          run.provider,
+          run.query,
+          run.status,
+          run.fetched,
+          run.added,
+          run.skipped,
+          run.error ?? null,
+          JSON.stringify(run),
+          dateOrNull(run.startedAt) ?? new Date(),
+          dateOrNull(run.finishedAt),
+        ],
+      );
+    }
+  } catch (error) {
+    console.warn("[collection-library] postgres sync skipped", getErrorMessage(error));
+  }
+}
+
+const runningCollectionSourceIds = new Set<string>();
+
+async function runScheduledCollectionSources() {
+  const now = Date.now();
+  for (const source of collectionLibrary.sources) {
+    if (!source.enabled || !source.scheduleEveryHours || source.scheduleEveryHours <= 0) continue;
+    if (runningCollectionSourceIds.has(source.id)) continue;
+    const intervalMs = source.scheduleEveryHours * 60 * 60 * 1000;
+    if (source.lastRunAt && now - source.lastRunAt < intervalMs) continue;
+    runningCollectionSourceIds.add(source.id);
+    void runCollectionSourceQueued(source)
+      .catch((error) => {
+        console.warn("[collection] scheduled source failed", { sourceId: source.id, error: getErrorMessage(error) });
+      })
+      .finally(() => {
+        runningCollectionSourceIds.delete(source.id);
+      });
+  }
 }
 
 function publicUrlForUpload(fileName: string) {
@@ -4849,13 +6157,16 @@ if (agents.size === 0) {
 
 void cleanupExpiredJobs();
 cleanupExpiredEmailVerificationRecords();
+void runScheduledCollectionSources();
 setInterval(() => void cleanupExpiredJobs(), 60 * 60 * 1000);
 setInterval(cleanupExpiredEmailVerificationRecords, 60 * 1000);
+setInterval(() => void runScheduledCollectionSources(), 60 * 1000);
 app.listen(PORT, HOST, () => {
   console.log(`[backend] listening on http://${HOST}:${PORT}`);
   console.log(`[backend] loaded ${jobs.size} image jobs`);
   console.log(`[backend] loaded ${agents.size} agents`);
   console.log(`[backend] loaded ${styleLibrary.styles.length} style presets`);
+  console.log(`[backend] loaded ${collectionLibrary.works.length} collected works; scheduled sources: ${collectionLibrary.sources.filter((source) => source.enabled && source.scheduleEveryHours && source.scheduleEveryHours > 0).length}`);
   console.log(`[backend] email verification ${emailConfig.enabled ? "enabled" : "disabled"}`);
   console.log(`[backend] completed image job retention: ${Math.round(COMPLETED_JOB_RETENTION_MS / 60 / 60 / 1000)}h`);
 });

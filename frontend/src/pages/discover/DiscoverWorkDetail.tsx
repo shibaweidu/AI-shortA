@@ -1,69 +1,184 @@
-import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Copy, Download } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Copy, Download, ExternalLink } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import { useDiscoverStore } from "../../store/discoverStore";
+import { useDiscoverStore, type DiscoverWork } from "../../store/discoverStore";
+import { fetchCollectionWork, fetchRelatedCollectionWorks, reportCollectionImageBroken, type CollectionWork } from "../../services/collection";
+
+type DetailWork = {
+  id: string;
+  categoryId: string;
+  categoryName?: string;
+  title: string;
+  coverUrl: string;
+  prompt: string;
+  negativePrompt?: string;
+  model: string;
+  aspectRatio: string;
+  resolution?: string;
+  sourcePageUrl?: string;
+  provider?: string;
+  tags?: string[];
+};
+
+function fromLegacyWork(work: DiscoverWork): DetailWork {
+  return {
+    id: work.id,
+    categoryId: work.categoryId,
+    title: work.title,
+    coverUrl: work.coverUrl,
+    prompt: work.prompt,
+    model: work.model,
+    aspectRatio: work.aspectRatio,
+    resolution: work.resolution,
+  };
+}
+
+function fromCollectionWork(work: CollectionWork): DetailWork {
+  return {
+    id: work.id,
+    categoryId: work.categoryId,
+    categoryName: work.categoryName,
+    title: work.title,
+    coverUrl: work.displayUrl || work.originalImageUrl,
+    prompt: work.prompt,
+    negativePrompt: work.negativePrompt,
+    model: work.model || work.provider,
+    aspectRatio: work.aspectRatio,
+    resolution: work.width && work.height ? `${work.width}x${work.height}` : undefined,
+    sourcePageUrl: work.sourcePageUrl,
+    provider: work.provider,
+    tags: work.tags,
+  };
+}
 
 export default function DiscoverWorkDetail() {
   const { workId } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { works, categories, hasHydrated } = useDiscoverStore();
   const [copied, setCopied] = useState(false);
+  const [collectionWork, setCollectionWork] = useState<CollectionWork | null>(null);
+  const [relatedWorks, setRelatedWorks] = useState<CollectionWork[]>([]);
+  const [collectionLoading, setCollectionLoading] = useState(false);
+  const [collectionTried, setCollectionTried] = useState(false);
 
-  const work = works.find((w) => w.id === workId);
-  const category = work ? categories.find((c) => c.id === work.categoryId) : null;
+  const legacyWork = works.find((item) => item.id === workId);
+  const shouldLoadCollection = Boolean(workId) && (searchParams.get("source") === "collection" || !legacyWork);
 
   useEffect(() => {
-    if (hasHydrated && !work) {
+    if (!shouldLoadCollection || !workId) return;
+    let cancelled = false;
+    setCollectionLoading(true);
+    setCollectionTried(false);
+    fetchCollectionWork(workId)
+      .then((work) => {
+        if (!cancelled) setCollectionWork(work);
+      })
+      .catch(() => {
+        if (!cancelled) setCollectionWork(null);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setCollectionLoading(false);
+          setCollectionTried(true);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldLoadCollection, workId]);
+
+  useEffect(() => {
+    if (!collectionWork) {
+      setRelatedWorks([]);
+      return;
+    }
+    let cancelled = false;
+    fetchRelatedCollectionWorks(collectionWork.id, 8)
+      .then((items) => {
+        if (!cancelled) setRelatedWorks(items);
+      })
+      .catch(() => {
+        if (!cancelled) setRelatedWorks([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [collectionWork]);
+
+  const detailWork = useMemo(() => {
+    if (collectionWork) return fromCollectionWork(collectionWork);
+    if (legacyWork) return fromLegacyWork(legacyWork);
+    return null;
+  }, [collectionWork, legacyWork]);
+  const category = detailWork
+    ? categories.find((item) => item.id === detailWork.categoryId) ?? { id: detailWork.categoryId, name: detailWork.categoryName || "未分类" }
+    : null;
+
+  useEffect(() => {
+    if (!hasHydrated || collectionLoading) return;
+    if (!detailWork && (!shouldLoadCollection || collectionTried)) {
       navigate("/", { replace: true });
     }
-  }, [hasHydrated, work, navigate]);
+  }, [collectionLoading, collectionTried, detailWork, hasHydrated, navigate, shouldLoadCollection]);
 
   const handleRemake = () => {
-    if (!work) return;
-
-    // 滚动到页面底部
-    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
-
-    // 触发生成器填充（通过 URL 参数传递）
-    navigate(`/?remake=${work.id}`);
+    if (!detailWork) return;
+    if (collectionWork) {
+      navigate(`/?prompt=${encodeURIComponent(detailWork.prompt)}&ratio=${encodeURIComponent(detailWork.aspectRatio)}`);
+      return;
+    }
+    navigate(`/?remake=${detailWork.id}`);
   };
 
   const handleCopyPrompt = () => {
-    if (!work) return;
-    navigator.clipboard.writeText(work.prompt);
+    if (!detailWork) return;
+    void navigator.clipboard.writeText(detailWork.prompt);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    window.setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownload = () => {
-    if (!work) return;
+    if (!detailWork) return;
     const link = document.createElement("a");
-    link.href = work.coverUrl;
-    link.download = `${work.title}.png`;
+    link.href = detailWork.coverUrl;
+    link.download = `${detailWork.title}.png`;
     link.click();
   };
 
-  if (!hasHydrated || !work) return null;
+  const handleImageError = () => {
+    if (!collectionWork) return;
+    void reportCollectionImageBroken(collectionWork.id);
+    navigate("/", { replace: true });
+  };
+
+  const handleRelatedImageError = (id: string) => {
+    void reportCollectionImageBroken(id);
+    setRelatedWorks((current) => current.filter((item) => item.id !== id));
+  };
+
+  if (!hasHydrated || collectionLoading || !detailWork) return null;
 
   return (
     <div className="min-h-screen bg-[#08090d] text-white">
       <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-[#08090d]/80 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
-          <button
-            onClick={() => navigate("/")}
-            className="flex items-center gap-2 text-[#9aa3b7] transition hover:text-white"
-          >
+          <button onClick={() => navigate("/")} className="flex items-center gap-2 text-[#9aa3b7] transition hover:text-white">
             <ArrowLeft className="h-5 w-5" />
             <span>返回</span>
           </button>
 
           <div className="flex items-center gap-3">
-            <Button
-              onClick={handleDownload}
-              variant="outline"
-              className="border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.06]"
-            >
+            {detailWork.sourcePageUrl ? (
+              <Button asChild variant="outline" className="border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.06]">
+                <a href={detailWork.sourcePageUrl} target="_blank" rel="noreferrer">
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  来源
+                </a>
+              </Button>
+            ) : null}
+            <Button onClick={handleDownload} variant="outline" className="border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.06]">
               <Download className="mr-2 h-4 w-4" />
               下载
             </Button>
@@ -77,48 +192,58 @@ export default function DiscoverWorkDetail() {
       <div className="mx-auto max-w-7xl px-6 py-12">
         <div className="grid gap-8 lg:grid-cols-[1fr,400px]">
           <div className="flex items-center justify-center overflow-hidden rounded-[32px] border border-white/[0.08] bg-[#12151c] p-8">
-            <img src={work.coverUrl} alt={work.title} className="max-h-[80vh] w-full object-contain" />
+            <img src={detailWork.coverUrl} alt={detailWork.title} onError={handleImageError} className="max-h-[80vh] w-full object-contain" />
           </div>
 
           <div className="space-y-6">
             <div>
               <div className="mb-2 text-sm text-[#8f97aa]">{category?.name}</div>
-              <h1 className="text-3xl font-semibold text-white">{work.title}</h1>
+              <h1 className="text-3xl font-semibold text-white">{detailWork.title}</h1>
+              {detailWork.provider || detailWork.tags?.length ? (
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-[#9aa3b7]">
+                  {detailWork.provider ? <span className="rounded-full bg-white/[0.05] px-3 py-1">来源：{detailWork.provider}</span> : null}
+                  {detailWork.tags?.map((tag) => (
+                    <span key={tag} className="rounded-full bg-white/[0.05] px-3 py-1">{tag}</span>
+                  ))}
+                </div>
+              ) : null}
             </div>
 
             <div className="rounded-3xl border border-white/[0.08] bg-[#11141b] p-6">
               <div className="mb-4 flex items-center justify-between">
                 <div className="text-sm font-medium text-white">提示词</div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleCopyPrompt}
-                  className="border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.06]"
-                >
+                <Button size="sm" variant="outline" onClick={handleCopyPrompt} className="border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.06]">
                   <Copy className="mr-2 h-3 w-3" />
                   {copied ? "已复制" : "复制"}
                 </Button>
               </div>
-              <p className="whitespace-pre-wrap text-sm leading-7 text-[#e4e8f0]">{work.prompt}</p>
+              <p className="whitespace-pre-wrap text-sm leading-7 text-[#e4e8f0]">{detailWork.prompt || "暂无提示词"}</p>
             </div>
+
+            {detailWork.negativePrompt ? (
+              <div className="rounded-3xl border border-white/[0.08] bg-[#11141b] p-6">
+                <div className="mb-4 text-sm font-medium text-white">负面提示词</div>
+                <p className="whitespace-pre-wrap text-sm leading-7 text-[#c7cfdd]">{detailWork.negativePrompt}</p>
+              </div>
+            ) : null}
 
             <div className="rounded-3xl border border-white/[0.08] bg-[#11141b] p-6">
               <div className="mb-4 text-sm font-medium text-white">生成参数</div>
               <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
+                <div className="flex justify-between gap-4">
                   <span className="text-[#8f97aa]">模型</span>
-                  <span className="text-white">{work.model}</span>
+                  <span className="text-right text-white">{detailWork.model}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-[#8f97aa]">比例</span>
-                  <span className="text-white">{work.aspectRatio}</span>
+                  <span className="text-white">{detailWork.aspectRatio}</span>
                 </div>
-                {work.resolution && (
+                {detailWork.resolution ? (
                   <div className="flex justify-between">
                     <span className="text-[#8f97aa]">分辨率</span>
-                    <span className="text-white">{work.resolution}</span>
+                    <span className="text-white">{detailWork.resolution}</span>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
 
@@ -127,6 +252,36 @@ export default function DiscoverWorkDetail() {
             </Button>
           </div>
         </div>
+        {relatedWorks.length > 0 ? (
+          <section className="mt-12">
+            <div className="mb-5 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-white">相关推荐</h2>
+              <span className="text-sm text-[#8f97aa]">{category?.name}</span>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {relatedWorks.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => navigate(`/discover/${item.id}?source=collection`)}
+                  className="group overflow-hidden rounded-2xl border border-white/[0.08] bg-[#11141b] text-left transition hover:-translate-y-0.5 hover:border-cyan-300/30"
+                >
+                  <img
+                    src={item.coverUrl}
+                    alt={item.title}
+                    loading="lazy"
+                    onError={() => handleRelatedImageError(item.id)}
+                    className="aspect-[4/3] w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                  />
+                  <div className="p-3">
+                    <div className="line-clamp-1 text-sm font-medium text-white">{item.title}</div>
+                    <div className="mt-1 line-clamp-1 text-xs text-[#8f97aa]">{item.categoryName}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </div>
     </div>
   );
