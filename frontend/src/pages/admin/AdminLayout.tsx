@@ -30,57 +30,69 @@ export default function AdminLayout() {
     { path: adminPath("settings"), label: "管理员设置", icon: Shield },
   ];
 
+  const currentLabel = navItems.find((item) => item.path === location.pathname)?.label ?? "";
+
   return (
-    <div className="flex h-full bg-[#08090d] text-white">
-      <aside className="w-64 border-r border-white/[0.06] bg-[#0d0f14] p-6">
-        <div className="mb-8">
-          <h1 className="text-xl font-semibold text-white">后台管理</h1>
-          <p className="mt-1 text-xs text-[#8f97aa]">站点内容与系统管理</p>
+    <div className="flex h-screen flex-col overflow-hidden bg-[#08090d] text-white">
+      <header className="flex h-16 shrink-0 items-center justify-between border-b border-white/[0.06] bg-[#0d0f14] px-6">
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-semibold text-white">后台管理</h1>
+          {currentLabel ? (
+            <>
+              <span className="text-[#3a4150]">/</span>
+              <span className="text-sm text-[#9aa3b7]">{currentLabel}</span>
+            </>
+          ) : null}
         </div>
-
-        <nav className="space-y-2">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.path;
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={cn(
-                  "flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition",
-                  isActive
-                    ? "bg-cyan-400/10 text-cyan-300"
-                    : "text-[#9aa3b7] hover:bg-white/[0.04] hover:text-white"
-                )}
-              >
-                <Icon className="h-4 w-4" />
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        <div className="mt-8 border-t border-white/[0.06] pt-6">
-          <div className="mb-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3">
-            <div className="truncate text-sm text-white">{account.username}</div>
-            <button type="button" onClick={logout} className="mt-2 flex items-center gap-2 text-xs text-[#8f97aa] hover:text-white">
-              <LogOut className="h-3.5 w-3.5" />
-              退出后台
-            </button>
-          </div>
+        <div className="flex items-center gap-4">
+          <span className="hidden text-sm text-[#9aa3b7] sm:block">{account.username}</span>
           <Link
             to="/"
-            className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm text-[#9aa3b7] transition hover:bg-white/[0.04] hover:text-white"
+            className="flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-xs text-[#9aa3b7] transition hover:bg-white/[0.06] hover:text-white"
           >
-            <Home className="h-4 w-4" />
+            <Home className="h-3.5 w-3.5" />
             返回首页
           </Link>
+          <button
+            type="button"
+            onClick={logout}
+            className="flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2 text-xs text-[#9aa3b7] transition hover:bg-white/[0.06] hover:text-white"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            退出后台
+          </button>
         </div>
-      </aside>
+      </header>
 
-      <main className="flex-1 overflow-y-auto">
-        <Outlet />
-      </main>
+      <div className="flex min-h-0 flex-1">
+        <aside className="w-64 shrink-0 overflow-y-auto border-r border-white/[0.06] bg-[#0d0f14] p-6">
+          <nav className="space-y-2">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = location.pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl px-4 py-3 text-sm transition",
+                    isActive
+                      ? "bg-cyan-400/10 text-cyan-300"
+                      : "text-[#9aa3b7] hover:bg-white/[0.04] hover:text-white"
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+        </aside>
+
+        <main className="min-w-0 flex-1 overflow-y-auto">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

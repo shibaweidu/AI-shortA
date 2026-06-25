@@ -28,7 +28,7 @@ import {
   getVideoDurationOptionsForModel,
 } from "../../lib/generatorOptions";
 import { generateImageAsset, generateVideoAsset } from "../../services/media";
-import { fetchHomeFeed, reportCollectionImageBroken, type CollectionWork } from "../../services/collection";
+import { fetchHomeFeed, publishGeneratedWork, reportCollectionImageBroken, type CollectionWork } from "../../services/collection";
 
 function padNumber(value: number) {
   return value.toString().padStart(2, "0");
@@ -54,6 +54,8 @@ export default function LandingHome() {
   const [searchParams, setSearchParams] = useSearchParams();
   const generatorRef = useRef<HTMLDivElement>(null);
   const feedLoadMoreRef = useRef<HTMLDivElement>(null);
+  // 标记当前请求归属哪次拉取，切换导航时旧请求的结果会被丢弃，避免覆盖新分类内容。
+  const feedRequestRef = useRef(0);
   const { projects, items, addProject, addItem, updateItem, hasHydrated } = useFlowStore();
   const { spendCredits, refundCredits } = useCreditStore();
   const { currentUserId } = useAuthStore();
@@ -83,6 +85,10 @@ export default function LandingHome() {
   const [feedHasMore, setFeedHasMore] = useState(false);
   const [feedLoading, setFeedLoading] = useState(false);
   const [feedError, setFeedError] = useState("");
+  // feedItems 当前对应的分类（数据真正返回后才更新），用于过滤与避免切换时闪烁。
+  const [feedCategory, setFeedCategory] = useState("");
+  // 累积出现过的采集分类（只增不减），保证切换到某分类后其它导航 Tab 不消失。
+  const [knownFeedCategories, setKnownFeedCategories] = useState<Array<{ id: string; name: string }>>([]);
 
   // 处理做同款功能
   useEffect(() => {
@@ -176,12 +182,27 @@ export default function LandingHome() {
   const titleHighlightIndex = homeTitle.indexOf(" ");
   const titlePrefix = titleHighlightIndex >= 0 ? homeTitle.slice(0, titleHighlightIndex) : homeTitle;
   const titleSuffix = titleHighlightIndex >= 0 ? homeTitle.slice(titleHighlightIndex + 1) : "";
+  // 把当前 feed 里出现的分类并入累积列表（只增不减），避免筛选后导航 Tab 消失。
+  useEffect(() => {
+    if (feedItems.length === 0) return;
+    setKnownFeedCategories((current) => {
+      const map = new Map(current.map((item) => [item.id, item]));
+      let changed = false;
+      for (const work of feedItems) {
+        if (!map.has(work.categoryId)) {
+          map.set(work.categoryId, { id: work.categoryId, name: work.categoryName });
+          changed = true;
+        }
+      }
+      return changed ? Array.from(map.values()) : current;
+    });
+  }, [feedItems]);
+
   const publicCategories = useMemo(() => {
     const categoryIdsWithWorks = new Set(works.map((work) => work.categoryId));
     const legacyCategories = categories.filter((category) => categoryIdsWithWorks.has(category.id));
-    const collectionCategories = Array.from(new Map(feedItems.map((work) => [work.categoryId, { id: work.categoryId, name: work.categoryName }])).values());
-    return [...legacyCategories, ...collectionCategories.filter((category) => !legacyCategories.some((item) => item.id === category.id))];
-  }, [categories, feedItems, works]);
+    return [...legacyCategories, ...knownFeedCategories.filter((category) => !legacyCategories.some((item) => item.id === category.id))];
+  }, [categories, knownFeedCategories, works]);
   const hasPublishedDiscoverContent = works.length > 0 || feedItems.length > 0;
 
   const visibleCards = useMemo(() => {
@@ -196,11 +217,11 @@ export default function LandingHome() {
     }));
     const legacyCards = works.map((work) => ({ ...work, source: "legacy" as const, categoryName: categories.find((category) => category.id === work.categoryId)?.name }));
     const sourceCards = feedItems.length > 0 ? collectionCards : legacyCards;
-    const filtered = activeTab
-      ? sourceCards.filter((w) => {
-          const cat = categories.find((c) => c.id === w.categoryId);
-          return feedItems.length > 0 || cat?.id === activeTab || w.categoryId === activeTab;
-        })
+    // 用 feedCategory（数据已加载的分类）而非 activeTab 过滤：切换分类时旧内容先留着，
+    // 等新数据返回再整体替换，避免列表瞬间清空导致塌缩、跳回顶部。
+    const effectiveCategory = feedItems.length > 0 ? feedCategory : activeTab;
+    const filtered = effectiveCategory
+      ? sourceCards.filter((w) => w.categoryId === effectiveCategory)
       : sourceCards;
 
     const query = discoverQuery.trim().toLowerCase();
@@ -208,7 +229,7 @@ export default function LandingHome() {
     return filtered.filter((work) =>
       `${work.title} ${work.prompt}`.toLowerCase().includes(query)
     );
-  }, [activeTab, discoverQuery, feedItems, works, categories]);
+  }, [activeTab, feedCategory, discoverQuery, feedItems, works, categories]);
 
   useEffect(() => {
     if (!activeTab) return;
@@ -247,23 +268,30 @@ export default function LandingHome() {
   }, []);
 
   const loadFeedPage = async (cursor?: string, categoryId = activeTab) => {
-    if (feedLoading) return;
+    // 翻页（带 cursor）时若已有请求在跑就跳过；切换分类的首屏加载（无 cursor）必须执行，不能被跳过。
+    if (cursor && feedLoading) return;
+    const requestId = cursor ? feedRequestRef.current : ++feedRequestRef.current;
     setFeedLoading(true);
     setFeedError("");
     try {
       const page = await fetchHomeFeed({ cursor, limit: 30, categoryId: categoryId || undefined });
+      // 请求返回时若已切换到别的分类，丢弃这次结果，避免覆盖。
+      if (requestId !== feedRequestRef.current) return;
       setFeedItems((current) => cursor ? [...current, ...page.items.filter((item) => !current.some((existing) => existing.id === item.id))] : page.items);
+      if (!cursor) setFeedCategory(categoryId);
       setFeedCursor(page.nextCursor);
       setFeedHasMore(page.hasMore);
     } catch (error) {
+      if (requestId !== feedRequestRef.current) return;
       setFeedError(error instanceof Error ? error.message : String(error));
     } finally {
-      setFeedLoading(false);
+      if (requestId === feedRequestRef.current) setFeedLoading(false);
     }
   };
 
   useEffect(() => {
-    setFeedItems([]);
+    // 不在这里清空 feedItems：清空会让列表高度塌缩、页面跳回顶部。
+    // loadFeedPage(无 cursor) 会在新数据到达时整体替换，切换时滚动位置得以保持。
     setFeedCursor(undefined);
     setFeedHasMore(false);
     void loadFeedPage(undefined, activeTab);
@@ -381,6 +409,20 @@ export default function LandingHome() {
               return;
             }
             updateItem(itemId, { status: "completed", url });
+            void publishGeneratedWork({
+              itemId,
+              projectId,
+              userId: currentUserId ?? undefined,
+              mediaType: "image",
+              url,
+              prompt: itemPrompt,
+              model: modelLabel,
+              aspectRatio,
+              resolution,
+              metadata: { modelValue: model },
+            }).catch((error) => {
+              if (localStorage.getItem("media-debug") === "1") console.log("[media-debug] publish generated image failed", error);
+            });
             return;
           }
 
@@ -403,6 +445,20 @@ export default function LandingHome() {
             return;
           }
           updateItem(itemId, { status: "completed", url, progress: 100 });
+          void publishGeneratedWork({
+            itemId,
+            projectId,
+            userId: currentUserId ?? undefined,
+            mediaType: "video",
+            url,
+            prompt: itemPrompt,
+            model: modelLabel,
+            aspectRatio,
+            resolution,
+            metadata: { modelValue: model, duration },
+          }).catch((error) => {
+            if (localStorage.getItem("media-debug") === "1") console.log("[media-debug] publish generated video failed", error);
+          });
         } catch (error) {
           if (localStorage.getItem("media-debug") === "1") console.log("[media-debug] generation failed", error);
           updateItem(itemId, {
@@ -583,8 +639,8 @@ export default function LandingHome() {
         </section>
 
         {hasPublishedDiscoverContent ? (
-        <section className="mt-12 mx-auto max-w-[1536px] px-2">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <section className="mt-12 mx-auto max-w-[2304px] px-2">
+          <div className="mx-auto flex max-w-[1536px] flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
               {publicCategories.length > 0 ? (
                 <>
@@ -624,7 +680,7 @@ export default function LandingHome() {
             </label>
           </div>
 
-          <div className="mt-8 columns-1 gap-6 sm:columns-2 lg:columns-3 xl:columns-4">
+          <div className="mt-8 columns-2 gap-6 sm:columns-3 lg:columns-4 xl:columns-5 2xl:columns-6">
             {visibleCards.map((work) => {
               const category = categories.find((c) => c.id === work.categoryId);
               return (

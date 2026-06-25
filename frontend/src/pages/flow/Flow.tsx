@@ -40,6 +40,7 @@ import {
   recoverGeneratedVideoAsset,
   recoverGeneratedVideoAssets,
 } from "../../services/media";
+import { publishGeneratedWork } from "../../services/collection";
 import { useFlowUiStore } from "../../store/flowUiStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUserModelStore } from "../../store/userModelStore";
@@ -407,6 +408,20 @@ export default function Flow() {
             updateItem(item.id, { status: "error", progress: undefined, saveError: "历史图片任务不存在，请重新生成。" });
           } else if (!cancelled && url && isSavableAssetUrl(url)) {
             updateItem(item.id, { status: "completed", url, progress: 100, saveError: undefined });
+            void publishGeneratedWork({
+              itemId: item.id,
+              projectId: item.projectId,
+              userId: currentUserId ?? undefined,
+              mediaType: "image",
+              url,
+              prompt: item.prompt,
+              model: item.parameters.model,
+              aspectRatio: item.parameters.aspectRatio,
+              resolution: item.parameters.resolution,
+              metadata: { modelValue: item.parameters.modelValue, recovered: true },
+            }).catch((error) => {
+              if (localStorage.getItem("media-debug") === "1") console.log("[media-debug] publish recovered image failed", error);
+            });
             if (saveDirectoryHandle) {
               void saveItemToFolder({ ...item, status: "completed", url, progress: 100 }, saveDirectoryHandle);
             }
@@ -433,6 +448,20 @@ export default function Flow() {
             updateItem(item.id, { status: "error", progress: undefined, saveError: VIDEO_JOB_MISSING_ERROR_MESSAGE });
           } else if (!cancelled && url && isSavableAssetUrl(url)) {
             updateItem(item.id, { status: "completed", url, progress: 100, saveError: undefined });
+            void publishGeneratedWork({
+              itemId: item.id,
+              projectId: item.projectId,
+              userId: currentUserId ?? undefined,
+              mediaType: "video",
+              url,
+              prompt: item.prompt,
+              model: item.parameters.model,
+              aspectRatio: item.parameters.aspectRatio,
+              resolution: item.parameters.resolution,
+              metadata: { modelValue: item.parameters.modelValue, duration: item.parameters.duration, recovered: true },
+            }).catch((error) => {
+              if (localStorage.getItem("media-debug") === "1") console.log("[media-debug] publish recovered video failed", error);
+            });
             if (saveDirectoryHandle) {
               void saveItemToFolder({ ...item, status: "completed", url, progress: 100 }, saveDirectoryHandle);
             }
@@ -677,6 +706,20 @@ export default function Flow() {
               return;
             }
             updateItem(id, { status: "completed", url, saveError: undefined });
+            void publishGeneratedWork({
+              itemId: id,
+              projectId: currentProject.id,
+              userId: currentUserId ?? undefined,
+              mediaType: "image",
+              url,
+              prompt: itemPrompt,
+              model: modelLabel,
+              aspectRatio,
+              resolution,
+              metadata: { modelValue: model },
+            }).catch((error) => {
+              if (localStorage.getItem("media-debug") === "1") console.log("[media-debug] publish generated image failed", error);
+            });
             if (saveDirectoryHandle) {
               void saveItemToFolder(
                 {
@@ -719,6 +762,20 @@ export default function Flow() {
             return;
           }
           updateItem(id, { status: "completed", url, progress: 100, saveError: undefined });
+          void publishGeneratedWork({
+            itemId: id,
+            projectId: currentProject.id,
+            userId: currentUserId ?? undefined,
+            mediaType: "video",
+            url,
+            prompt: itemPrompt,
+            model: modelLabel,
+            aspectRatio,
+            resolution,
+            metadata: { modelValue: model, duration },
+          }).catch((error) => {
+            if (localStorage.getItem("media-debug") === "1") console.log("[media-debug] publish generated video failed", error);
+          });
           if (saveDirectoryHandle) {
             void saveItemToFolder(
               {

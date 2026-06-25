@@ -12,6 +12,7 @@ type DetailWork = {
   title: string;
   coverUrl: string;
   prompt: string;
+  promptHint?: string;
   negativePrompt?: string;
   model: string;
   aspectRatio: string;
@@ -21,13 +22,36 @@ type DetailWork = {
   tags?: string[];
 };
 
+function extractPromptFromMetadata(metadata?: Record<string, unknown>) {
+  if (!metadata) return "";
+  const meta = metadata.meta && typeof metadata.meta === "object" && !Array.isArray(metadata.meta)
+    ? (metadata.meta as Record<string, unknown>)
+    : undefined;
+  const nested = metadata.metadata && typeof metadata.metadata === "object" && !Array.isArray(metadata.metadata)
+    ? (metadata.metadata as Record<string, unknown>)
+    : undefined;
+  const candidates = [
+    metadata.prompt,
+    metadata.name,
+    metadata.description,
+    meta?.prompt,
+    meta?.Prompt,
+    nested?.prompt,
+    nested?.Prompt,
+  ];
+  const found = candidates.find((value) => typeof value === "string" && value.trim());
+  return typeof found === "string" ? found.trim() : "";
+}
+
 function fromLegacyWork(work: DiscoverWork): DetailWork {
+  const prompt = work.prompt || extractPromptFromMetadata((work as unknown as { metadata?: Record<string, unknown> }).metadata);
   return {
     id: work.id,
     categoryId: work.categoryId,
     title: work.title,
     coverUrl: work.coverUrl,
-    prompt: work.prompt,
+    prompt,
+    promptHint: prompt ? undefined : "这条作品暂时没有抓到完整提示词，可以先查看源站或等待补采集。",
     model: work.model,
     aspectRatio: work.aspectRatio,
     resolution: work.resolution,
@@ -35,13 +59,15 @@ function fromLegacyWork(work: DiscoverWork): DetailWork {
 }
 
 function fromCollectionWork(work: CollectionWork): DetailWork {
+  const prompt = work.prompt || extractPromptFromMetadata(work.metadata);
   return {
     id: work.id,
     categoryId: work.categoryId,
     categoryName: work.categoryName,
     title: work.title,
     coverUrl: work.displayUrl || work.originalImageUrl,
-    prompt: work.prompt,
+    prompt,
+    promptHint: prompt ? undefined : "这条作品暂时没有抓到完整提示词，可以先查看源站或等待补采集。",
     negativePrompt: work.negativePrompt,
     model: work.model || work.provider,
     aspectRatio: work.aspectRatio,
@@ -112,6 +138,7 @@ export default function DiscoverWorkDetail() {
     if (legacyWork) return fromLegacyWork(legacyWork);
     return null;
   }, [collectionWork, legacyWork]);
+
   const category = detailWork
     ? categories.find((item) => item.id === detailWork.categoryId) ?? { id: detailWork.categoryId, name: detailWork.categoryName || "未分类" }
     : null;
@@ -125,6 +152,10 @@ export default function DiscoverWorkDetail() {
 
   const handleRemake = () => {
     if (!detailWork) return;
+    if (!detailWork.prompt.trim()) {
+      navigate("/", { replace: false });
+      return;
+    }
     if (collectionWork) {
       navigate(`/?prompt=${encodeURIComponent(detailWork.prompt)}&ratio=${encodeURIComponent(detailWork.aspectRatio)}`);
       return;
@@ -133,7 +164,7 @@ export default function DiscoverWorkDetail() {
   };
 
   const handleCopyPrompt = () => {
-    if (!detailWork) return;
+    if (!detailWork?.prompt.trim()) return;
     void navigator.clipboard.writeText(detailWork.prompt);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
@@ -171,14 +202,14 @@ export default function DiscoverWorkDetail() {
 
           <div className="flex items-center gap-3">
             {detailWork.sourcePageUrl ? (
-              <Button asChild variant="outline" className="border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.06]">
+              <Button asChild variant="outline" className="border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.06] hover:text-white">
                 <a href={detailWork.sourcePageUrl} target="_blank" rel="noreferrer">
                   <ExternalLink className="mr-2 h-4 w-4" />
-                  来源
+                  源站
                 </a>
               </Button>
             ) : null}
-            <Button onClick={handleDownload} variant="outline" className="border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.06]">
+            <Button onClick={handleDownload} variant="outline" className="border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.06] hover:text-white">
               <Download className="mr-2 h-4 w-4" />
               下载
             </Button>
@@ -212,12 +243,23 @@ export default function DiscoverWorkDetail() {
             <div className="rounded-3xl border border-white/[0.08] bg-[#11141b] p-6">
               <div className="mb-4 flex items-center justify-between">
                 <div className="text-sm font-medium text-white">提示词</div>
-                <Button size="sm" variant="outline" onClick={handleCopyPrompt} className="border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.06]">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleCopyPrompt}
+                  disabled={!detailWork.prompt.trim()}
+                  className="border-white/[0.08] bg-white/[0.03] text-white hover:bg-white/[0.06] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
                   <Copy className="mr-2 h-3 w-3" />
                   {copied ? "已复制" : "复制"}
                 </Button>
               </div>
               <p className="whitespace-pre-wrap text-sm leading-7 text-[#e4e8f0]">{detailWork.prompt || "暂无提示词"}</p>
+              {detailWork.promptHint ? (
+                <div className="mt-3 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-xs leading-6 text-amber-100">
+                  {detailWork.promptHint}
+                </div>
+              ) : null}
             </div>
 
             {detailWork.negativePrompt ? (
@@ -252,6 +294,7 @@ export default function DiscoverWorkDetail() {
             </Button>
           </div>
         </div>
+
         {relatedWorks.length > 0 ? (
           <section className="mt-12">
             <div className="mb-5 flex items-center justify-between">

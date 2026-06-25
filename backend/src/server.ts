@@ -210,8 +210,15 @@ type StyleLibrary = {
   styles: StylePreset[];
 };
 
-type CollectionProvider = "civitai" | "lexica";
+type CollectionProvider = "civitai" | "lexica" | "generated";
 type CollectionWorkStatus = "pending" | "published" | "rejected" | "broken";
+
+// Civitai 的 /api/v1/images 已不再支持 query/tags 文本过滤（实测所有关键词返回同一榜单），
+// 现在只有 sort × period 能产生差异化、可翻页的结果，用它们区分不同采集源。
+type CivitaiSort = "Most Reactions" | "Most Comments" | "Most Collected" | "Newest";
+type CivitaiPeriod = "Day" | "Week" | "Month" | "Year" | "AllTime";
+const CIVITAI_SORTS: CivitaiSort[] = ["Most Reactions", "Most Comments", "Most Collected", "Newest"];
+const CIVITAI_PERIODS: CivitaiPeriod[] = ["Day", "Week", "Month", "Year", "AllTime"];
 
 type CollectionSource = {
   id: string;
@@ -219,6 +226,8 @@ type CollectionSource = {
   name: string;
   query: string;
   enabled: boolean;
+  sort?: CivitaiSort;
+  period?: CivitaiPeriod;
   targetCategoryId?: string;
   targetCategoryName?: string;
   targetTags: string[];
@@ -227,6 +236,7 @@ type CollectionSource = {
   maxItemsPerRun: number;
   scheduleEveryHours?: number;
   lastRunAt?: number;
+  cursor?: string;
   createdAt: number;
   updatedAt: number;
 };
@@ -291,6 +301,22 @@ type CollectionClassifierSettings = {
   modelId: string;
   provider?: ProviderRequestConfig;
   classificationPrompt: string;
+};
+
+type CollectionCategoryConfig = {
+  id: string;
+  name: string;
+  keywords: string[];
+  custom?: boolean;
+};
+
+type GeneratedPublishSettings = {
+  enabled: boolean;
+  autoPublish: boolean;
+  mediaTypes: MediaJobType[];
+  defaultCategoryId: string;
+  defaultCategoryName: string;
+  categories: CollectionCategoryConfig[];
 };
 
 type DataBackupManifest = {
@@ -494,9 +520,28 @@ const collectionJobQueue: Array<{
 const queuedCollectionSourceIds = new Set<string>();
 const COLLECTION_QUEUE_CONCURRENCY = Math.max(1, Math.min(5, Number(process.env.COLLECTION_QUEUE_CONCURRENCY ?? 2)));
 const COLLECTION_QUEUE_RETRIES = Math.max(0, Math.min(5, Number(process.env.COLLECTION_QUEUE_RETRIES ?? 2)));
+const COLLECTION_REQUEST_TIMEOUT_MS = Math.max(5000, Math.min(60000, Number(process.env.COLLECTION_REQUEST_TIMEOUT_SECONDS ?? 15) * 1000));
+const COLLECTION_RUN_TIMEOUT_MS = Math.max(10000, Math.min(180000, Number(process.env.COLLECTION_RUN_TIMEOUT_SECONDS ?? 45) * 1000));
+const COLLECTION_DETAIL_ENRICH_LIMIT = Math.max(0, Math.min(20, Number(process.env.COLLECTION_DETAIL_ENRICH_LIMIT ?? 8)));
+// Lexica 搜索结果稀疏，cursor 以 100 步进翻页。限制最多翻多少页 + 墙钟预算，避免单次采集触发运行超时。
+const LEXICA_MAX_SEARCH_PAGES = Math.max(1, Math.min(40, Number(process.env.LEXICA_MAX_SEARCH_PAGES ?? 8)));
+const LEXICA_SEARCH_BUDGET_MS = Math.max(5000, Math.min(120000, Number(process.env.LEXICA_SEARCH_BUDGET_SECONDS ?? 30) * 1000));
+// 在部分 Windows 环境里 Node 的原生 fetch（undici）连不上采集源（IPv6/连接超时），
+// 但 PowerShell 的 Invoke-WebRequest 可以。给原生 fetch 一个较短的探测超时，
+// 一旦它出现连接级失败就熔断，后续请求直接走 PowerShell，避免每条请求都白等 ~10s。
+const COLLECTION_NATIVE_FETCH_TIMEOUT_MS = Math.max(2000, Math.min(15000, Number(process.env.COLLECTION_NATIVE_FETCH_TIMEOUT_SECONDS ?? 4) * 1000));
+let nativeFetchConnectBroken = process.platform === "win32" && process.env.COLLECTION_FORCE_POWERSHELL === "1";
+// Civitai 对匿名请求隐藏 meta（prompt/参数/模型版本）。配置 API token 后详情接口才会返回这些字段。
+// 没有 token 时富化详情没有意义，会白白把每次采集数量限制在 COLLECTION_DETAIL_ENRICH_LIMIT 条。
+let civitaiApiToken = (process.env.CIVITAI_API_TOKEN ?? "").trim();
+const CIVITAI_API_TOKEN_KEY = "civitai-api-token";
+function getCivitaiApiToken() {
+  return civitaiApiToken;
+}
 
 const REFERENCE_SETTINGS_KEY = "reference-settings";
 const COLLECTION_CLASSIFIER_SETTINGS_KEY = "collection-classifier-settings";
+const GENERATED_PUBLISH_SETTINGS_KEY = "generated-publish-settings";
 const DEFAULT_REFERENCE_SETTINGS: ReferenceSettings = {
   visionModelValue: "",
   classificationPrompt:
@@ -520,6 +565,27 @@ const DEFAULT_COLLECTION_CLASSIFIER_SETTINGS: CollectionClassifierSettings = {
     '你是 AI 作品采集分类器。请根据图片、prompt、模型和标签，把作品归入一个首页主分类。只能返回 JSON：{"categoryId":"portrait|character|scene|product|poster|illustration|style|anime|cg|chinese","categoryName":"中文分类名","tags":["标签1","标签2"],"confidence":0-1}。分类定义：portrait=真人/摄影/人像，character=角色/IP/头像，scene=风景/建筑/室内/环境，product=商品/包装/器物，poster=海报/封面/排版，illustration=插画/概念图/绘本，style=视觉风格/技法/材质，anime=二次元/漫画/赛璐璐，cg=3D/CG/渲染，chinese=国风/汉服/水墨/武侠。',
 };
 let collectionClassifierSettings: CollectionClassifierSettings = { ...DEFAULT_COLLECTION_CLASSIFIER_SETTINGS };
+const DEFAULT_COLLECTION_CATEGORIES: CollectionCategoryConfig[] = [
+  { id: "portrait", name: "人像", keywords: ["portrait", "photo", "woman", "man", "face", "headshot", "fashion", "beauty", "girl", "boy", "美女", "人像"] },
+  { id: "character", name: "角色", keywords: ["character", "game character", "mascot", "avatar", "chibi", "hero", "villain", "角色", "头像", "动物"] },
+  { id: "scene", name: "场景", keywords: ["landscape", "interior", "architecture", "city", "room", "forest", "mountain", "street", "environment", "风景", "建筑", "室内"] },
+  { id: "product", name: "产品", keywords: ["product", "packaging", "sneaker", "bottle", "perfume", "furniture", "device", "watch", "bag", "产品", "包装", "商品"] },
+  { id: "poster", name: "海报", keywords: ["poster", "cover", "typography", "movie poster", "advertising", "banner", "海报", "封面", "排版"] },
+  { id: "illustration", name: "插画", keywords: ["illustration", "children's book", "flat", "hand drawn", "concept art", "storybook", "插画", "绘本", "概念图"] },
+  { id: "style", name: "风格", keywords: ["watercolor", "pixel art", "clay", "low poly", "cyberpunk", "cinematic", "minimal", "film", "retro", "风格"] },
+  { id: "anime", name: "二次元", keywords: ["anime", "manga", "cel shading", "waifu", "japanese animation", "kawaii", "二次元", "动漫", "漫画"] },
+  { id: "cg", name: "3D/CG", keywords: ["3d", "cgi", "render", "octane", "blender", "unreal engine", "zbrush", "渲染"] },
+  { id: "chinese", name: "国风", keywords: ["chinese", "hanfu", "ink", "wuxia", "guofeng", "oriental", "xianxia", "国风", "汉服", "水墨", "武侠"] },
+];
+const DEFAULT_GENERATED_PUBLISH_SETTINGS: GeneratedPublishSettings = {
+  enabled: true,
+  autoPublish: true,
+  mediaTypes: ["image"],
+  defaultCategoryId: "style",
+  defaultCategoryName: "风格",
+  categories: DEFAULT_COLLECTION_CATEGORIES,
+};
+let generatedPublishSettings: GeneratedPublishSettings = { ...DEFAULT_GENERATED_PUBLISH_SETTINGS };
 
 app.use(cors());
 app.set("trust proxy", process.env.TRUST_PROXY ?? "loopback");
@@ -805,6 +871,63 @@ app.put("/api/collection/classifier-settings", (request, response) => {
   response.json(collectionClassifierSettings);
 });
 
+app.get("/api/collection/civitai-token", (_request, response) => {
+  const token = getCivitaiApiToken();
+  // 不回传明文，仅告知是否已配置 + 末尾 4 位用于确认。
+  response.json({
+    configured: Boolean(token),
+    hint: token ? `••••${token.slice(-4)}` : "",
+  });
+});
+
+app.put("/api/collection/civitai-token", (request, response) => {
+  const body = asPlainRecord(request.body);
+  civitaiApiToken = getStringField(body, "token").trim();
+  appState.set(CIVITAI_API_TOKEN_KEY, civitaiApiToken);
+  void saveAppStateSoon();
+  response.json({ configured: Boolean(civitaiApiToken), hint: civitaiApiToken ? `••••${civitaiApiToken.slice(-4)}` : "" });
+});
+
+app.get("/api/collection/generated-publish-settings", (_request, response) => {
+  response.json(getGeneratedPublishSettings());
+});
+
+app.put("/api/collection/generated-publish-settings", (request, response) => {
+  generatedPublishSettings = normalizeGeneratedPublishSettings(request.body);
+  appState.set(GENERATED_PUBLISH_SETTINGS_KEY, JSON.stringify(generatedPublishSettings));
+  void saveAppStateSoon();
+  response.json(generatedPublishSettings);
+});
+
+app.post("/api/generated-works/publish", async (request, response) => {
+  const body = asPlainRecord(request.body);
+  const mediaType: MediaJobType = body.mediaType === "video" ? "video" : "image";
+  try {
+    const work = await publishGeneratedWork({
+      itemId: getStringField(body, "itemId") || undefined,
+      projectId: getStringField(body, "projectId") || undefined,
+      userId: getStringField(body, "userId") || undefined,
+      mediaType,
+      url: getStringField(body, "url"),
+      prompt: getStringField(body, "prompt"),
+      negativePrompt: getStringField(body, "negativePrompt") || undefined,
+      model: getStringField(body, "model") || undefined,
+      categoryId: getStringField(body, "categoryId") || undefined,
+      categoryName: getStringField(body, "categoryName") || undefined,
+      status: body.status === "pending" ? "pending" : body.status === "published" ? "published" : undefined,
+      manual: body.manual === true,
+      aspectRatio: getStringField(body, "aspectRatio") || undefined,
+      width: getNumberField(body, "width"),
+      height: getNumberField(body, "height"),
+      resolution: getStringField(body, "resolution") || undefined,
+      metadata: asPlainRecord(body.metadata),
+    });
+    response.json({ ok: true, work: work ? getCollectionPublicWork(work) : null });
+  } catch (error) {
+    response.status(500).json({ error: getErrorMessage(error) });
+  }
+});
+
 type CollectedCandidate = {
   provider: CollectionProvider;
   sourceWorkId?: string;
@@ -889,79 +1012,172 @@ function paginateCollectionWorks(works: CollectionWork[], cursor: string | undef
 }
 
 async function collectFromLexica(query: string, limit: number): Promise<CollectedCandidate[]> {
-  const targetUrl = `https://lexica.art/api/v1/search?q=${encodeURIComponent(query)}`;
-  const data = asPlainRecord(await fetchJsonWithPowerShellFallback(targetUrl));
-  const images = Array.isArray(data.images) ? data.images : [];
-  return images.slice(0, limit).map((item): CollectedCandidate | null => {
-    const record = asPlainRecord(item);
-    const originalImageUrl = normalizeUrl(record.src);
-    if (!originalImageUrl) return null;
-    const gallery = getStringField(record, "gallery");
-    const width = getNumberField(record, "width");
-    const height = getNumberField(record, "height");
-    const prompt = getStringField(record, "prompt");
-    return {
-      provider: "lexica",
-      sourceWorkId: getStringField(record, "id") || originalImageUrl,
-      sourcePageUrl: gallery ? `https://lexica.art/prompt/${gallery}` : undefined,
-      originalImageUrl,
-      displayUrl: originalImageUrl,
-      thumbnailUrl: normalizeUrl(record.srcSmall) || undefined,
-      title: createCollectionTitle(prompt, "lexica"),
-      prompt,
-      model: getStringField(record, "model") || undefined,
-      width,
-      height,
-      nsfw: record.nsfw === true,
-      metadata: record,
-    };
-  }).filter((item): item is CollectedCandidate => Boolean(item));
+  try {
+    for (const variant of buildLexicaQueryVariants(query)) {
+      const candidates = await fetchLexicaApiCandidates(variant, limit);
+      if (candidates.length > 0) return candidates;
+    }
+  } catch (error) {
+    console.warn("[collection] lexica api failed, fallback to html", getErrorMessage(error));
+  }
+
+  const html = await fetchTextWithPowerShellFallback(`https://lexica.art/?q=${encodeURIComponent(query)}`);
+  const extracted = extractLexicaPromptFromHtml(html);
+  if (!extracted.imageUrl) return [];
+  const prompt = extracted.promptText || query;
+  return [{
+    provider: "lexica",
+    sourceWorkId: extracted.promptId || extracted.imageUrl,
+    sourcePageUrl: extracted.promptId ? `https://lexica.art/prompt/${extracted.promptId}` : `https://lexica.art/?q=${encodeURIComponent(query)}`,
+    originalImageUrl: extracted.imageUrl,
+    displayUrl: extracted.imageUrl,
+    title: createCollectionTitle(prompt, "lexica"),
+    prompt,
+    model: "lexica-web",
+    nsfw: false,
+    metadata: { source: "html-fallback", query, extracted },
+  }];
+}
+
+// Civitai REST API v1 已彻底移除 meta（prompt 等），但网站使用的 tRPC 接口
+// image.getGenerationData 在带 token 时仍返回 prompt/negativePrompt/resources。
+async function fetchCivitaiGenerationData(imageId: string): Promise<{
+  prompt?: string;
+  negativePrompt?: string;
+  model?: string;
+  meta?: Record<string, unknown>;
+} | null> {
+  const input = encodeURIComponent(JSON.stringify({ json: { id: Number(imageId) || imageId, type: "image" } }));
+  const targetUrl = `https://civitai.com/api/trpc/image.getGenerationData?input=${input}`;
+  const raw = asPlainRecord(await fetchJsonWithPowerShellFallback(targetUrl));
+  const data = asPlainRecord(asPlainRecord(asPlainRecord(raw.result).data).json);
+  const meta = asPlainRecord(data.meta);
+  const prompt = getStringField(meta, "prompt") || undefined;
+  const negativePrompt = getStringField(meta, "negativePrompt") || undefined;
+  const resources = Array.isArray(data.resources) ? data.resources.map(asPlainRecord) : [];
+  const model = resources.map((resource) => getStringField(resource, "modelName")).filter(Boolean).join(", ") || undefined;
+  if (!prompt && !negativePrompt && !model) return null;
+  return { prompt, negativePrompt, model, meta };
+}
+
+function parseCivitaiCollectedCandidate(record: Record<string, unknown>, fallbackImageUrl?: string): CollectedCandidate | null {
+  const originalImageUrl = normalizeUrl(record.url) || normalizeUrl(fallbackImageUrl);
+  if (!originalImageUrl) return null;
+  const meta = asPlainRecord(record.meta);
+  const width = getNumberField(record, "width");
+  const height = getNumberField(record, "height");
+  const prompt = getCollectionPrompt(record) || getCollectionPrompt(meta);
+  const resources = Array.isArray(record.resources) ? record.resources.map(asPlainRecord) : [];
+  const baseModel = getStringField(record, "baseModel");
+  const username = getStringField(record, "username");
+  const model = resources.map((resource) => getStringField(resource, "name")).filter(Boolean).join(", ") || getStringField(meta, "Model") || baseModel || undefined;
+  // 无 token 时 Civitai 不返回 prompt，用 prompt 首行→baseModel/作者→默认 的顺序生成可读标题。
+  const promptTitle = prompt.split(/\r?\n/, 1)[0]?.trim().replace(/\s+/g, " ") || "";
+  const title = (promptTitle ? Array.from(promptTitle).slice(0, 28).join("") : "")
+    || [baseModel, username && `@${username}`].filter(Boolean).join(" · ")
+    || "Civitai 采集作品";
+  return {
+    provider: "civitai",
+    sourceWorkId: getStringField(record, "id") || originalImageUrl,
+    sourcePageUrl: `https://civitai.com/images/${getStringField(record, "id")}`,
+    originalImageUrl,
+    displayUrl: originalImageUrl,
+    thumbnailUrl: normalizeUrl(record.thumbnailUrl) || undefined,
+    title,
+    prompt,
+    negativePrompt: getStringField(meta, "negativePrompt") || undefined,
+    model,
+    width,
+    height,
+    nsfw: record.nsfw === true || record.nsfwLevel === "X" || record.nsfwLevel === "XXX",
+    tags: [...resources.map((resource) => getStringField(resource, "type")).filter(Boolean), ...(baseModel ? [baseModel] : [])],
+    metadata: record,
+  };
 }
 
 async function collectFromCivitai(query: string, limit: number): Promise<CollectedCandidate[]> {
+  return collectFromCivitaiWithCursor(query, limit, undefined).then((result) => result.candidates);
+}
+
+function normalizeCivitaiSort(value: unknown): CivitaiSort {
+  return CIVITAI_SORTS.includes(value as CivitaiSort) ? (value as CivitaiSort) : "Most Reactions";
+}
+
+function normalizeCivitaiPeriod(value: unknown): CivitaiPeriod {
+  return CIVITAI_PERIODS.includes(value as CivitaiPeriod) ? (value as CivitaiPeriod) : "Month";
+}
+
+async function collectFromCivitaiWithCursor(
+  query: string,
+  limit: number,
+  cursor?: string,
+  options?: { sort?: CivitaiSort; period?: CivitaiPeriod }
+): Promise<{ candidates: CollectedCandidate[]; nextCursor?: string }> {
+  const sort = normalizeCivitaiSort(options?.sort);
+  const period = normalizeCivitaiPeriod(options?.period);
+  // Civitai 忽略 query/tags 过滤，只按 sort+period 翻页，因此这里不再循环关键词变体。
   const params = new URLSearchParams({
     limit: String(Math.max(1, Math.min(100, limit))),
-    sort: "Most Reactions",
-    period: "Month",
+    sort,
+    period,
   });
-  const trimmedQuery = query.trim();
-  if (trimmedQuery) params.set("query", trimmedQuery);
+  if (cursor) params.set("cursor", cursor);
   const targetUrl = `https://civitai.com/api/v1/images?${params.toString()}`;
   const data = asPlainRecord(await fetchJsonWithPowerShellFallback(targetUrl));
   const items = Array.isArray(data.items) ? data.items : [];
-  return items.slice(0, limit).map((item): CollectedCandidate | null => {
-    const record = asPlainRecord(item);
-    const originalImageUrl = normalizeUrl(record.url);
-    if (!originalImageUrl) return null;
-    const meta = asPlainRecord(record.meta);
-    const width = getNumberField(record, "width");
-    const height = getNumberField(record, "height");
-    const prompt = getStringField(meta, "prompt") || getStringField(record, "name");
-    const resources = Array.isArray(record.resources) ? record.resources.map(asPlainRecord) : [];
-    const model = resources.map((resource) => getStringField(resource, "name")).filter(Boolean).join(", ") || getStringField(meta, "Model") || undefined;
-    return {
-      provider: "civitai",
-      sourceWorkId: getStringField(record, "id") || originalImageUrl,
-      sourcePageUrl: `https://civitai.com/images/${getStringField(record, "id")}`,
-      originalImageUrl,
-      displayUrl: originalImageUrl,
-      thumbnailUrl: normalizeUrl(record.thumbnailUrl) || undefined,
-      title: createCollectionTitle(prompt, "civitai"),
-      prompt,
-      negativePrompt: getStringField(meta, "negativePrompt") || undefined,
-      model,
-      width,
-      height,
-      nsfw: record.nsfw === true || record.nsfwLevel === "X" || record.nsfwLevel === "XXX",
-      tags: resources.map((resource) => getStringField(resource, "type")).filter(Boolean),
-      metadata: record,
-    };
-  }).filter((item): item is CollectedCandidate => Boolean(item));
+  const metadata = asPlainRecord(data.metadata);
+  const nextCursor = getStringField(metadata, "nextCursor") || undefined;
+  const usedQuery = `${sort} · ${period}`;
+  const listed = items.slice(0, limit).map((item): CollectedCandidate | null => parseCivitaiCollectedCandidate(asPlainRecord(item))).filter((item): item is CollectedCandidate => Boolean(item));
+
+  // Civitai 对匿名请求隐藏 meta（prompt 等），只有配置了 API token 时详情接口才会返回。
+  // 没有 token 时富化没有意义，反而会把入库数量限制在 COLLECTION_DETAIL_ENRICH_LIMIT 条，
+  // 因此仅在有 token 时富化；否则直接用列表数据，让 maxItemsPerRun 全量生效。
+  const canEnrich = Boolean(getCivitaiApiToken()) && COLLECTION_DETAIL_ENRICH_LIMIT > 0;
+  if (canEnrich) {
+    const enrichedById = new Map<string, { prompt?: string; negativePrompt?: string; model?: string; meta?: Record<string, unknown> }>();
+    const enrichItems = items.slice(0, Math.min(limit, COLLECTION_DETAIL_ENRICH_LIMIT));
+    for (const item of enrichItems) {
+      const record = asPlainRecord(item);
+      const imageId = getStringField(record, "id");
+      if (!imageId) continue;
+      try {
+        const gen = await fetchCivitaiGenerationData(imageId);
+        if (gen) enrichedById.set(imageId, gen);
+      } catch {
+        // 富化失败时保留列表里的基础数据，下面会用 listed 兜底。
+      }
+    }
+    // 把 tRPC 拿到的 prompt 合并回列表项；未富化或无 prompt 的保留基础数据，保证返回数量 = maxItemsPerRun。
+    const candidates = listed.map((candidate) => {
+      const id = candidate.sourceWorkId ?? "";
+      const gen = enrichedById.get(id);
+      const prompt = gen?.prompt || candidate.prompt || "";
+      const promptTitle = prompt.split(/\r?\n/, 1)[0]?.trim().replace(/\s+/g, " ") || "";
+      return {
+        ...candidate,
+        prompt,
+        negativePrompt: gen?.negativePrompt || candidate.negativePrompt,
+        model: gen?.model || candidate.model,
+        title: promptTitle ? Array.from(promptTitle).slice(0, 28).join("") : candidate.title,
+        metadata: { ...(candidate.metadata ?? {}), collectionQuery: query, usedQuery, genMeta: gen?.meta },
+      };
+    });
+    return { candidates, nextCursor };
+  }
+
+  const candidates = listed.map((candidate) => ({ ...candidate, metadata: { ...(candidate.metadata ?? {}), collectionQuery: query, usedQuery } }));
+  return { candidates, nextCursor };
 }
 
 async function collectCandidates(source: CollectionSource) {
   if (source.provider === "lexica") return collectFromLexica(source.query, source.maxItemsPerRun);
-  return collectFromCivitai(source.query, source.maxItemsPerRun);
+  const result = await collectFromCivitaiWithCursor(source.query, source.maxItemsPerRun, source.cursor, {
+    sort: source.sort,
+    period: source.period,
+  });
+  source.cursor = result.nextCursor;
+  return result.candidates;
 }
 
 async function classifyCollectedCandidateWithVision(candidate: CollectedCandidate) {
@@ -1102,7 +1318,11 @@ async function runCollectionSourceNow(source: CollectionSource) {
   void saveCollectionLibrarySoon();
 
   try {
-    const candidates = await collectCandidates(source);
+    const candidates = await withTimeout(
+      collectCandidates(source),
+      COLLECTION_RUN_TIMEOUT_MS,
+      `collection run timed out after ${Math.round(COLLECTION_RUN_TIMEOUT_MS / 1000)}s`
+    );
     const result = await upsertCollectedCandidates(source, candidates);
     run.status = "completed";
     run.fetched = candidates.length;
@@ -1118,6 +1338,17 @@ async function runCollectionSourceNow(source: CollectionSource) {
     void saveCollectionLibrarySoon();
     throw error;
   }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+    timeout.unref?.();
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
 }
 
 function processCollectionQueue() {
@@ -1176,6 +1407,38 @@ app.get("/api/collection/runs", (request, response) => {
   response.json({ runs });
 });
 
+app.delete("/api/collection/runs", (request, response) => {
+  const sourceId = typeof request.query.sourceId === "string" ? request.query.sourceId : undefined;
+  const before = collectionLibrary.runs.length;
+  const removedIds = collectionLibrary.runs
+    .filter((run) => (!sourceId || run.sourceId === sourceId) && run.status !== "running")
+    .map((run) => run.id);
+  collectionLibrary.runs = collectionLibrary.runs.filter((run) => !removedIds.includes(run.id));
+  if (isPostgresEnabled() && removedIds.length > 0) {
+    void queryPostgres("delete from collection_runs where id = any($1::text[])", [removedIds]).catch(() => undefined);
+  }
+  void saveCollectionLibrarySoon();
+  response.json({ ok: true, deleted: before - collectionLibrary.runs.length });
+});
+
+app.delete("/api/collection/runs/:id", (request, response) => {
+  const run = collectionLibrary.runs.find((item) => item.id === request.params.id);
+  if (!run) {
+    response.status(404).json({ error: "run not found" });
+    return;
+  }
+  if (run.status === "running") {
+    response.status(400).json({ error: "run is still running" });
+    return;
+  }
+  collectionLibrary.runs = collectionLibrary.runs.filter((item) => item.id !== request.params.id);
+  if (isPostgresEnabled()) {
+    void queryPostgres("delete from collection_runs where id = $1", [request.params.id]).catch(() => undefined);
+  }
+  void saveCollectionLibrarySoon();
+  response.json({ ok: true, deleted: true });
+});
+
 app.post("/api/collection/sources", (request, response) => {
   const body = asPlainRecord(request.body);
   const provider = normalizeCollectionProvider(body.provider);
@@ -1191,6 +1454,8 @@ app.post("/api/collection/sources", (request, response) => {
     name: getStringField(body, "name") || `${provider} ${query}`,
     query,
     enabled: body.enabled !== false,
+    sort: provider === "civitai" ? normalizeCivitaiSort(body.sort) : undefined,
+    period: provider === "civitai" ? normalizeCivitaiPeriod(body.period) : undefined,
     targetCategoryId: getStringField(body, "targetCategoryId") || undefined,
     targetCategoryName: getStringField(body, "targetCategoryName") || undefined,
     targetTags: normalizeStringArray(body.targetTags),
@@ -1222,6 +1487,8 @@ app.patch("/api/collection/sources/:id", (request, response) => {
   if (body.name !== undefined) source.name = getStringField(body, "name") || source.name;
   if (body.query !== undefined) source.query = getStringField(body, "query") || source.query;
   if (body.enabled !== undefined) source.enabled = body.enabled !== false;
+  if (body.sort !== undefined) source.sort = normalizeCivitaiSort(body.sort);
+  if (body.period !== undefined) source.period = normalizeCivitaiPeriod(body.period);
   if (body.targetCategoryId !== undefined) source.targetCategoryId = getStringField(body, "targetCategoryId") || undefined;
   if (body.targetCategoryName !== undefined) source.targetCategoryName = getStringField(body, "targetCategoryName") || undefined;
   if (body.targetTags !== undefined) source.targetTags = normalizeStringArray(body.targetTags);
@@ -1232,6 +1499,7 @@ app.patch("/api/collection/sources/:id", (request, response) => {
     const next = getNumberField(body, "scheduleEveryHours");
     source.scheduleEveryHours = next && next > 0 ? Math.max(1, Math.min(24 * 30, next)) : undefined;
   }
+  if (body.cursor !== undefined) source.cursor = getStringField(body, "cursor") || undefined;
   source.updatedAt = Date.now();
   void saveCollectionLibrarySoon();
   response.json({ source });
@@ -2323,7 +2591,32 @@ function asPlainRecord(value: unknown): Record<string, unknown> {
 
 function getStringField(record: Record<string, unknown>, key: string) {
   const value = record[key];
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return typeof value === "string" ? value.trim() : "";
+}
+
+function getDeepStringField(record: Record<string, unknown>, path: string[]) {
+  let current: unknown = record;
+  for (const key of path) {
+    if (!current || typeof current !== "object" || Array.isArray(current)) return "";
+    current = (current as Record<string, unknown>)[key];
+  }
+  return typeof current === "string" ? current.trim() : "";
+}
+
+function getCollectionPrompt(record: Record<string, unknown>) {
+  const candidates = [
+    getStringField(record, "prompt"),
+    getStringField(record, "name"),
+    getStringField(record, "description"),
+    getDeepStringField(record, ["meta", "prompt"]),
+    getDeepStringField(record, ["meta", "Prompt"]),
+    getDeepStringField(record, ["metadata", "prompt"]),
+    getDeepStringField(record, ["metadata", "Prompt"]),
+    getDeepStringField(record, ["data", "prompt"]),
+    getDeepStringField(record, ["data", "description"]),
+  ];
+  return candidates.find(Boolean) || "";
 }
 
 function getNumberField(record: Record<string, unknown>, key: string) {
@@ -2343,7 +2636,7 @@ function normalizeUrl(value: unknown) {
 }
 
 function normalizeCollectionProvider(value: unknown): CollectionProvider | null {
-  return value === "civitai" || value === "lexica" ? value : null;
+  return value === "civitai" || value === "lexica" || value === "generated" ? value : null;
 }
 
 function normalizeStringArray(value: unknown, fallback: string[] = []) {
@@ -2387,10 +2680,20 @@ function classifyCollectionWork(input: { prompt?: string; model?: string; tags?:
   return matched ? { categoryId: matched.id, categoryName: matched.name } : { categoryId: "style", categoryName: "风格" };
 }
 
+function classifyCollectionWorkConfigured(input: { prompt?: string; model?: string; tags?: string[]; fallbackId?: string; fallbackName?: string }) {
+  if (input.fallbackId || input.fallbackName) {
+    return { categoryId: input.fallbackId || "recommended", categoryName: input.fallbackName || "推荐" };
+  }
+  const settings = getGeneratedPublishSettings();
+  const haystack = `${input.prompt ?? ""} ${input.model ?? ""} ${(input.tags ?? []).join(" ")}`.toLowerCase();
+  const matched = settings.categories.find((rule) => rule.keywords.some((keyword) => haystack.includes(keyword.toLowerCase())));
+  return matched ? { categoryId: matched.id, categoryName: matched.name } : { categoryId: settings.defaultCategoryId, categoryName: settings.defaultCategoryName };
+}
+
 function createCollectionTitle(prompt: string, provider: CollectionProvider) {
   const firstLine = prompt.split(/\r?\n/, 1)[0]?.trim().replace(/\s+/g, " ") || "";
   if (firstLine) return Array.from(firstLine).slice(0, 28).join("");
-  return provider === "civitai" ? "Civitai 采集作品" : "Lexica 采集作品";
+  return provider === "civitai" ? "Civitai 采集作品" : provider === "lexica" ? "Lexica 采集作品" : "AI 作品";
 }
 
 function computeCollectionScore(input: { width?: number; height?: number; nsfw: boolean; collectedAt: number; failedCount?: number }) {
@@ -2399,6 +2702,91 @@ function computeCollectionScore(input: { width?: number; height?: number; nsfw: 
   const freshHours = Math.max(0, (Date.now() - input.collectedAt) / 1000 / 60 / 60);
   const freshness = Math.max(0, 40 - freshHours / 6);
   return Math.round((quality + freshness + (input.nsfw ? -80 : 20) - (input.failedCount ?? 0) * 30) * 100) / 100;
+}
+
+async function publishGeneratedWork(input: {
+  itemId?: string;
+  projectId?: string;
+  userId?: string;
+  mediaType: MediaJobType;
+  url: string;
+  prompt: string;
+  negativePrompt?: string;
+  model?: string;
+  categoryId?: string;
+  categoryName?: string;
+  status?: "pending" | "published";
+  manual?: boolean;
+  aspectRatio?: string;
+  width?: number;
+  height?: number;
+  resolution?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const settings = getGeneratedPublishSettings();
+  if (!input.manual && !settings.enabled) return null;
+  if (!input.manual && !settings.mediaTypes.includes(input.mediaType)) return null;
+  if (!input.url || !input.prompt.trim()) return null;
+  const displayUrl = normalizeUrl(input.url) || getLocalUploadPathFromUrl(input.url) || input.url;
+  if (!displayUrl) return null;
+
+  const existing = collectionLibrary.works.find((work) =>
+    work.provider === "generated" &&
+    (work.sourceWorkId === input.itemId || work.originalImageUrl === displayUrl || work.displayUrl === displayUrl)
+  );
+  if (existing) return existing;
+
+  const category = classifyCollectionWorkConfigured({
+    prompt: input.prompt,
+    model: input.model,
+    tags: [],
+    fallbackId: input.categoryId,
+    fallbackName: input.categoryName,
+  });
+  const status = input.status ?? (settings.autoPublish ? "published" : "pending");
+  const now = Date.now();
+  const work: CollectionWork = {
+    id: createId("cw"),
+    sourceId: undefined,
+    provider: "generated",
+    sourceWorkId: input.itemId || displayUrl,
+    sourcePageUrl: undefined,
+    originalImageUrl: displayUrl,
+    displayUrl,
+    title: createCollectionTitle(input.prompt, "generated"),
+    prompt: input.prompt,
+    negativePrompt: input.negativePrompt,
+    model: input.model,
+    aspectRatio: input.aspectRatio || inferAspectRatio(input.width, input.height),
+    width: input.width,
+    height: input.height,
+    categoryId: category.categoryId,
+    categoryName: category.categoryName,
+    tags: [],
+    nsfw: false,
+    qualityScore: computeCollectionScore({ width: input.width, height: input.height, nsfw: false, collectedAt: now }),
+    recommendationScore: computeCollectionScore({ width: input.width, height: input.height, nsfw: false, collectedAt: now }),
+    featured: false,
+    status,
+    failedCount: 0,
+    metadata: {
+      source: "generated",
+      manual: input.manual === true,
+      itemId: input.itemId,
+      projectId: input.projectId,
+      userId: input.userId,
+      mediaType: input.mediaType,
+      resolution: input.resolution,
+      ...(input.metadata ?? {}),
+    },
+    collectedAt: now,
+    publishedAt: status === "published" ? now : undefined,
+    createdAt: now,
+    updatedAt: now,
+  };
+  collectionLibrary.works.push(work);
+  void saveCollectionLibrarySoon();
+  return work;
 }
 
 function normalizeCollectionLibraryFromFile(value: unknown): CollectionLibrary {
@@ -2416,6 +2804,8 @@ function normalizeCollectionLibraryFromFile(value: unknown): CollectionLibrary {
       name: getStringField(record, "name") || `${provider} ${query}`,
       query,
       enabled: record.enabled !== false,
+      sort: provider === "civitai" ? normalizeCivitaiSort(record.sort) : undefined,
+      period: provider === "civitai" ? normalizeCivitaiPeriod(record.period) : undefined,
       targetCategoryId: getStringField(record, "targetCategoryId") || undefined,
       targetCategoryName: getStringField(record, "targetCategoryName") || undefined,
       targetTags: normalizeStringArray(record.targetTags),
@@ -2424,6 +2814,7 @@ function normalizeCollectionLibraryFromFile(value: unknown): CollectionLibrary {
       maxItemsPerRun: Math.max(1, Math.min(200, Math.round(getNumberField(record, "maxItemsPerRun") ?? 50))),
       scheduleEveryHours: getNumberField(record, "scheduleEveryHours"),
       lastRunAt: getNumberField(record, "lastRunAt"),
+      cursor: getStringField(record, "cursor") || undefined,
       createdAt: getNumberField(record, "createdAt") ?? now,
       updatedAt: getNumberField(record, "updatedAt") ?? now,
     };
@@ -2453,8 +2844,8 @@ function normalizeCollectionLibraryFromFile(value: unknown): CollectionLibrary {
       originalImageUrl: originalImageUrl || displayUrl,
       displayUrl,
       thumbnailUrl: normalizeUrl(record.thumbnailUrl) || undefined,
-      title: getStringField(record, "title") || createCollectionTitle(getStringField(record, "prompt"), provider),
-      prompt: getStringField(record, "prompt"),
+      title: getStringField(record, "title") || createCollectionTitle(getCollectionPrompt(record), provider),
+      prompt: getCollectionPrompt(record),
       negativePrompt: getStringField(record, "negativePrompt") || undefined,
       model: getStringField(record, "model") || undefined,
       aspectRatio: getStringField(record, "aspectRatio") || inferAspectRatio(width, height),
@@ -2557,37 +2948,364 @@ function getErrorMessage(error: unknown) {
 }
 
 async function fetchJsonWithPowerShellFallback(targetUrl: string) {
+  const authHeader = buildCivitaiAuthHeader(targetUrl);
+  if (nativeFetchConnectBroken) {
+    return JSON.parse(await fetchViaPowerShell(targetUrl, "application/json", authHeader)) as unknown;
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), COLLECTION_NATIVE_FETCH_TIMEOUT_MS);
   try {
     const upstreamResponse = await fetch(targetUrl, {
+      signal: controller.signal,
       headers: {
         Accept: "application/json",
         "User-Agent": "KoalaAI-Collector/1.0",
+        ...(authHeader ? { Authorization: authHeader } : {}),
       },
     });
     if (!upstreamResponse.ok) throw new Error(`request failed: ${upstreamResponse.status}`);
     return await upstreamResponse.json() as unknown;
   } catch (fetchError) {
     if (process.platform !== "win32") throw fetchError;
+    if (isConnectLevelFetchError(fetchError) && !nativeFetchConnectBroken) {
+      nativeFetchConnectBroken = true;
+      console.warn("[collection] native fetch connect failed, switching to PowerShell for this process", getErrorMessage(fetchError));
+    }
     try {
-      const escapedUrl = targetUrl.replace(/'/g, "''");
-      const script = [
-        "$ProgressPreference='SilentlyContinue'",
-        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
-        `$url = '${escapedUrl}'`,
-        "$headers = @{ Accept = 'application/json'; 'User-Agent' = 'KoalaAI-Collector/1.0' }",
-        "$response = Invoke-WebRequest -UseBasicParsing -Uri $url -Headers $headers -TimeoutSec 30",
-        "$response.Content",
-      ].join("; ");
-      const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], {
-        maxBuffer: 20 * 1024 * 1024,
-        timeout: 45000,
-        windowsHide: true,
-      });
-      return JSON.parse(stdout) as unknown;
+      return JSON.parse(await fetchViaPowerShell(targetUrl, "application/json", authHeader)) as unknown;
     } catch (fallbackError) {
       throw new Error(`fetch failed (${getErrorMessage(fetchError)}); PowerShell fallback failed (${getErrorMessage(fallbackError)})`);
     }
+  } finally {
+    clearTimeout(timeout);
   }
+}
+
+async function fetchTextWithPowerShellFallback(targetUrl: string) {
+  if (nativeFetchConnectBroken) {
+    return fetchViaPowerShell(targetUrl, "text/html");
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), COLLECTION_NATIVE_FETCH_TIMEOUT_MS);
+  try {
+    const upstreamResponse = await fetch(targetUrl, {
+      signal: controller.signal,
+      headers: {
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+      },
+    });
+    if (!upstreamResponse.ok) throw new Error(`request failed: ${upstreamResponse.status}`);
+    return await upstreamResponse.text();
+  } catch (fetchError) {
+    if (process.platform !== "win32") throw fetchError;
+    if (isConnectLevelFetchError(fetchError) && !nativeFetchConnectBroken) {
+      nativeFetchConnectBroken = true;
+      console.warn("[collection] native fetch connect failed, switching to PowerShell for this process", getErrorMessage(fetchError));
+    }
+    try {
+      return await fetchViaPowerShell(targetUrl, "text/html");
+    } catch (fallbackError) {
+      throw new Error(`fetch failed (${getErrorMessage(fetchError)}); PowerShell fallback failed (${getErrorMessage(fallbackError)})`);
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+// 判断是否是连接级失败（DNS/连接超时/拒绝/重置），这类错误对原生 fetch 在本进程内通常会持续复现，
+// 命中后熔断到 PowerShell；HTTP 状态错误（如 404/429）不算，避免误熔断。
+function isConnectLevelFetchError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (error.name === "AbortError") return true;
+  const cause = (error as { cause?: unknown }).cause;
+  const code = cause && typeof cause === "object" && "code" in cause ? String((cause as { code?: unknown }).code) : "";
+  const connectCodes = [
+    "UND_ERR_CONNECT_TIMEOUT",
+    "UND_ERR_HEADERS_TIMEOUT",
+    "ECONNREFUSED",
+    "ECONNRESET",
+    "ETIMEDOUT",
+    "ENOTFOUND",
+    "EAI_AGAIN",
+    "ENETUNREACH",
+    "EHOSTUNREACH",
+  ];
+  return connectCodes.includes(code);
+}
+
+async function fetchViaPowerShell(targetUrl: string, kind: "application/json" | "text/html", authHeader?: string): Promise<string> {
+  const escapedUrl = targetUrl.replace(/'/g, "''");
+  const accept = kind === "application/json"
+    ? "application/json"
+    : "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+  const userAgent = kind === "application/json"
+    ? "KoalaAI-Collector/1.0"
+    : "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+  const escapedAuth = authHeader ? authHeader.replace(/'/g, "''") : "";
+  const headerLine = escapedAuth
+    ? `$headers = @{ Accept = '${accept}'; 'User-Agent' = '${userAgent}'; Authorization = '${escapedAuth}' }`
+    : `$headers = @{ Accept = '${accept}'; 'User-Agent' = '${userAgent}' }`;
+  const script = [
+    "$ProgressPreference='SilentlyContinue'",
+    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+    `$url = '${escapedUrl}'`,
+    headerLine,
+    `$response = Invoke-WebRequest -UseBasicParsing -Uri $url -Headers $headers -TimeoutSec ${Math.ceil(COLLECTION_REQUEST_TIMEOUT_MS / 1000)}`,
+    "$response.Content",
+  ].join("; ");
+  const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], {
+    maxBuffer: 20 * 1024 * 1024,
+    timeout: COLLECTION_REQUEST_TIMEOUT_MS + 10000,
+    windowsHide: true,
+  });
+  return stdout;
+}
+
+// 仅对 Civitai API 请求附带 Bearer token；其它主机（如 Lexica）不加，避免泄露凭证。
+function buildCivitaiAuthHeader(targetUrl: string): string | undefined {
+  const token = getCivitaiApiToken();
+  if (!token) return undefined;
+  try {
+    const host = new URL(targetUrl).hostname.toLowerCase();
+    if (host === "civitai.com" || host.endsWith(".civitai.com")) {
+      return `Bearer ${token}`;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+// POST JSON 请求（Lexica 的 infinite-prompts 搜索接口只认 POST body 里的关键词）。
+// 与 GET 版同样支持原生 fetch 失败后回退 PowerShell。
+async function postJsonWithPowerShellFallback(targetUrl: string, body: unknown): Promise<unknown> {
+  const payload = JSON.stringify(body);
+  if (!nativeFetchConnectBroken) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), COLLECTION_NATIVE_FETCH_TIMEOUT_MS);
+    try {
+      const upstreamResponse = await fetch(targetUrl, {
+        method: "POST",
+        signal: controller.signal,
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        },
+        body: payload,
+      });
+      if (!upstreamResponse.ok) throw new Error(`request failed: ${upstreamResponse.status}`);
+      return await upstreamResponse.json() as unknown;
+    } catch (fetchError) {
+      if (process.platform !== "win32") throw fetchError;
+      if (isConnectLevelFetchError(fetchError) && !nativeFetchConnectBroken) {
+        nativeFetchConnectBroken = true;
+        console.warn("[collection] native fetch connect failed, switching to PowerShell for this process", getErrorMessage(fetchError));
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  return JSON.parse(await postJsonViaPowerShell(targetUrl, payload)) as unknown;
+}
+
+async function postJsonViaPowerShell(targetUrl: string, payload: string): Promise<string> {
+  const escapedUrl = targetUrl.replace(/'/g, "''");
+  const escapedBody = payload.replace(/'/g, "''");
+  const script = [
+    "$ProgressPreference='SilentlyContinue'",
+    "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+    `$url = '${escapedUrl}'`,
+    "$headers = @{ Accept = 'application/json'; 'User-Agent' = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36' }",
+    `$body = '${escapedBody}'`,
+    `$response = Invoke-WebRequest -UseBasicParsing -Uri $url -Headers $headers -Method Post -ContentType 'application/json' -Body $body -TimeoutSec ${Math.ceil(COLLECTION_REQUEST_TIMEOUT_MS / 1000)}`,
+    "$response.Content",
+  ].join("; ");
+  const { stdout } = await execFileAsync("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], {
+    maxBuffer: 20 * 1024 * 1024,
+    timeout: COLLECTION_REQUEST_TIMEOUT_MS + 10000,
+    windowsHide: true,
+  });
+  return stdout;
+}
+
+function extractLexicaPromptFromHtml(html: string): LexicaHtmlFallback {
+  const jsonLdMatches = [...html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)];
+  for (const match of jsonLdMatches) {
+    try {
+      const parsed = JSON.parse(match[1]);
+      const records = Array.isArray(parsed) ? parsed : [parsed];
+      for (const record of records) {
+        if (!record || typeof record !== "object") continue;
+        const text = getStringField(asPlainRecord(record), "description") || getStringField(asPlainRecord(record), "name");
+        if (text) return { promptText: text };
+      }
+    } catch {
+      // ignore malformed JSON-LD
+    }
+  }
+
+  const promptLinks = [...html.matchAll(/href="\/prompt\/([^"]+)"/gi)];
+  const images = [...html.matchAll(/<img[^>]+src="([^"]+)"/gi)];
+  const promptText = html.match(/class="[^"]*prompt[^"]*"[^>]*>([\s\S]*?)<\/[^>]+>/i)?.[1];
+  return {
+    promptText: promptText ? promptText.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : "",
+    promptId: promptLinks[0]?.[1],
+    imageUrl: normalizeUrl(images[0]?.[1]),
+  };
+}
+
+type LexicaHtmlFallback = {
+  promptText: string;
+  promptId?: string;
+  imageUrl?: string;
+};
+
+function buildLexicaQueryVariants(query: string) {
+  const trimmed = query.trim();
+  const variants = new Set<string>();
+  if (trimmed) variants.add(trimmed);
+
+  const asciiWords = trimmed
+    .toLowerCase()
+    .match(/[a-z0-9][a-z0-9\s-]{1,60}/g)
+    ?.map((item) => item.trim())
+    .filter(Boolean) ?? [];
+  for (const item of asciiWords) variants.add(item);
+
+  const chineseMap: Array<[RegExp, string]> = [
+    [/美女|女人|女孩|女性|人像|肖像/gi, "portrait woman"],
+    [/男人|男生|男孩/gi, "portrait man"],
+    [/风景|景色|自然|森林|山|海|天空|城市|街道|建筑/gi, "landscape scenery"],
+    [/插画|绘本|手绘|概念图/gi, "illustration"],
+    [/海报|封面|排版|banner/gi, "poster"],
+    [/角色|头像|IP|吉祥物/gi, "character avatar"],
+    [/二次元|动漫|漫画|赛璐璐/gi, "anime"],
+    [/国风|汉服|水墨|武侠|仙侠|东方/gi, "chinese style"],
+    [/3d|cg|渲染|虚幻|blender/gi, "3d cg render"],
+    [/产品|商品|包装|器物|瓶子|鞋|包/gi, "product packaging"],
+    [/室内|房间|客厅|卧室|厨房|办公/gi, "interior room"],
+    [/猫/gi, "cat"],
+    [/狗/gi, "dog"],
+    [/科幻|太空|宇宙|飞船/gi, "sci-fi space"],
+    [/赛博朋克|未来|霓虹/gi, "cyberpunk"],
+    [/治愈|温暖|可爱/gi, "cute cozy"],
+    [/暗黑|恐怖|悬疑/gi, "dark fantasy"],
+  ];
+  for (const [pattern, replacement] of chineseMap) {
+    if (pattern.test(trimmed)) variants.add(replacement);
+  }
+
+  if (variants.size === 0) variants.add("");
+  variants.add("");
+  return [...variants];
+}
+
+function buildCivitaiQueryVariants(query: string) {
+  const variants = new Set<string>();
+  const trimmed = query.trim();
+  if (trimmed) variants.add(trimmed);
+
+  const chineseMap: Array<[RegExp, string]> = [
+    [/人像|肖像|美女|女人|女孩|女性/gi, "portrait woman"],
+    [/男人|男生|男孩/gi, "portrait man"],
+    [/吉卜力|宫崎骏/gi, "ghibli style"],
+    [/赛博朋克/gi, "cyberpunk"],
+    [/国风|汉服|水墨|武侠|仙侠|东方/gi, "chinese style"],
+    [/二次元|动漫|漫画|赛璐璐/gi, "anime"],
+    [/角色|头像|IP|吉祥物/gi, "character"],
+    [/风景|场景|建筑|室内|森林|山|城市/gi, "landscape"],
+    [/产品|包装|商品/gi, "product"],
+    [/海报|封面|排版/gi, "poster"],
+    [/插画|绘本|概念图/gi, "illustration"],
+    [/3d|cg|渲染/gi, "3d render"],
+  ];
+  for (const [pattern, replacement] of chineseMap) {
+    if (pattern.test(trimmed)) variants.add(replacement);
+  }
+
+  const ascii = trimmed
+    .toLowerCase()
+    .match(/[a-z0-9][a-z0-9\s-]{1,80}/g)
+    ?.map((item) => item.trim())
+    .filter(Boolean) ?? [];
+  for (const item of ascii) variants.add(item);
+
+  if (variants.size === 0) variants.add("");
+  return [...variants];
+}
+void buildCivitaiQueryVariants; // Civitai 已忽略 query 文本过滤，保留映射表备用，避免未使用告警。
+
+
+
+function mapLexicaImageToCandidate(record: Record<string, unknown>, promptById: Map<string, Record<string, unknown>>): CollectedCandidate | null {
+  const imageId = getStringField(record, "id");
+  if (!imageId) return null;
+  // Lexica 图片 URL 由图片 id 构造（full_jpg 原图，sm2 缩略图）。
+  const originalImageUrl = `https://image.lexica.art/full_jpg/${imageId}`;
+  const promptId = getStringField(record, "promptid") || getStringField(record, "promptId");
+  const promptRecord = promptId ? promptById.get(promptId) : undefined;
+  const prompt = promptRecord ? getStringField(promptRecord, "prompt") : "";
+  const width = getNumberField(record, "width");
+  const height = getNumberField(record, "height");
+  return {
+    provider: "lexica",
+    sourceWorkId: imageId,
+    sourcePageUrl: promptId ? `https://lexica.art/prompt/${promptId}` : undefined,
+    originalImageUrl,
+    displayUrl: originalImageUrl,
+    thumbnailUrl: `https://image.lexica.art/sm2/${imageId}`,
+    title: createCollectionTitle(prompt, "lexica"),
+    prompt,
+    negativePrompt: promptRecord ? getStringField(promptRecord, "negativePrompt") || undefined : undefined,
+    model: (promptRecord ? getStringField(promptRecord, "model") : "") || "lexica-aperture",
+    width,
+    height,
+    nsfw: record.nsfw === true || (promptRecord?.is_private === true),
+    metadata: { ...record, promptRecord },
+  };
+}
+
+async function fetchLexicaApiCandidates(query: string, limit: number) {
+  // Lexica 的关键词搜索必须用 POST + body（GET 的 text 参数会被忽略，返回不相关结果）。
+  // images[] 提供图片，prompts[] 提供 prompt，通过 image.promptid → prompt.id 关联。
+  // 结果较稀疏，cursor 以 100 步进翻页，需累积多页才能凑够 limit 条。
+  // 每次请求经 PowerShell 较慢（数秒），因此设墙钟预算：逼近运行超时前就停，
+  // 返回已采集到的部分，避免翻页过多触发 45s 运行超时导致整批失败、零返回。
+  const collected: CollectedCandidate[] = [];
+  const seen = new Set<string>();
+  let cursor = 0;
+  const deadline = Date.now() + LEXICA_SEARCH_BUDGET_MS;
+  for (let page = 0; page < LEXICA_MAX_SEARCH_PAGES && collected.length < limit; page += 1) {
+    if (Date.now() > deadline) break;
+    const data = asPlainRecord(await postJsonWithPowerShellFallback("https://lexica.art/api/infinite-prompts", {
+      text: query,
+      searchMode: "images",
+      source: "search",
+      cursor,
+      model: "lexica-aperture-v2",
+    }));
+    const images = Array.isArray(data.images) ? data.images : [];
+    const prompts = Array.isArray(data.prompts) ? data.prompts.map(asPlainRecord) : [];
+    const promptById = new Map<string, Record<string, unknown>>();
+    for (const prompt of prompts) {
+      const id = getStringField(prompt, "id");
+      if (id) promptById.set(id, prompt);
+    }
+    for (const item of images) {
+      const candidate = mapLexicaImageToCandidate(asPlainRecord(item), promptById);
+      if (candidate && !seen.has(candidate.sourceWorkId ?? "")) {
+        seen.add(candidate.sourceWorkId ?? "");
+        collected.push(candidate);
+        if (collected.length >= limit) break;
+      }
+    }
+    const nextCursor = getNumberField(data, "nextCursor");
+    if (nextCursor === undefined || nextCursor === cursor) break;
+    cursor = nextCursor;
+  }
+  return collected.slice(0, limit);
 }
 
 function sanitizeText(value: string, maxLength = 2000) {
@@ -4151,6 +4869,48 @@ function getCollectionClassifierSettings() {
   }
 }
 
+function normalizeCollectionCategoryConfig(value: unknown): CollectionCategoryConfig | null {
+  const raw = asPlainRecord(value);
+  const id = getStringField(raw, "id").toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  const name = getStringField(raw, "name");
+  if (!id || !name) return null;
+  return {
+    id,
+    name,
+    keywords: normalizeStringArray(raw.keywords).slice(0, 80),
+    custom: raw.custom === true || !DEFAULT_COLLECTION_CATEGORIES.some((category) => category.id === id),
+  };
+}
+
+function normalizeGeneratedPublishSettings(input: unknown): GeneratedPublishSettings {
+  const raw = asPlainRecord(input);
+  const categories = Array.isArray(raw.categories)
+    ? raw.categories.map(normalizeCollectionCategoryConfig).filter((item): item is CollectionCategoryConfig => Boolean(item))
+    : DEFAULT_COLLECTION_CATEGORIES;
+  const mediaTypes = normalizeStringArray(raw.mediaTypes)
+    .filter((value): value is MediaJobType => value === "image" || value === "video");
+  const defaultCategoryId = getStringField(raw, "defaultCategoryId") || "style";
+  const defaultCategory = categories.find((category) => category.id === defaultCategoryId) ?? DEFAULT_COLLECTION_CATEGORIES.find((category) => category.id === defaultCategoryId);
+  return {
+    enabled: raw.enabled !== false,
+    autoPublish: raw.autoPublish !== false,
+    mediaTypes: mediaTypes.length ? mediaTypes : ["image"],
+    defaultCategoryId,
+    defaultCategoryName: getStringField(raw, "defaultCategoryName") || defaultCategory?.name || "风格",
+    categories: categories.length ? categories : DEFAULT_COLLECTION_CATEGORIES,
+  };
+}
+
+function getGeneratedPublishSettings() {
+  const saved = appState.get(GENERATED_PUBLISH_SETTINGS_KEY);
+  if (!saved) return generatedPublishSettings;
+  try {
+    return normalizeGeneratedPublishSettings(JSON.parse(saved));
+  } catch {
+    return generatedPublishSettings;
+  }
+}
+
 function normalizeCollectionCategoryId(value: unknown) {
   const id = typeof value === "string" ? value.trim().toLowerCase() : "";
   return ["portrait", "character", "scene", "product", "poster", "illustration", "style", "anime", "cg", "chinese"].includes(id) ? id : "";
@@ -4488,7 +5248,26 @@ async function ensureDataFiles() {
     }
   }
 
+  markStaleCollectionRunsFailed();
   collectionClassifierSettings = getCollectionClassifierSettings();
+  generatedPublishSettings = getGeneratedPublishSettings();
+  // 优先使用后台保存的 token；未保存时保留环境变量 CIVITAI_API_TOKEN 的默认值。
+  const savedCivitaiToken = appState.get(CIVITAI_API_TOKEN_KEY);
+  if (savedCivitaiToken !== undefined) civitaiApiToken = savedCivitaiToken.trim();
+}
+
+function markStaleCollectionRunsFailed() {
+  const cutoff = Date.now() - COLLECTION_RUN_TIMEOUT_MS;
+  let changed = false;
+  for (const run of collectionLibrary.runs) {
+    if (run.status !== "running") continue;
+    if (run.startedAt > cutoff) continue;
+    run.status = "failed";
+    run.error = `collection run was still running after restart and was marked failed`;
+    run.finishedAt = Date.now();
+    changed = true;
+  }
+  if (changed) void saveCollectionLibrarySoon();
 }
 
 function sleep(ms: number) {
@@ -5014,8 +5793,39 @@ async function saveImageResultOrFallback(jobId: string, imageUrl: string, authKe
 function updateJob(jobId: string, updates: Partial<ImageJob>) {
   const job = jobs.get(jobId);
   if (!job) return;
-  jobs.set(jobId, { ...job, ...updates, updatedAt: Date.now() });
+  const nextJob = { ...job, ...updates, updatedAt: Date.now() };
+  jobs.set(jobId, nextJob);
+  if (updates.status === "completed" && updates.resultUrl) {
+    void publishGeneratedWorkFromJob(jobId, nextJob).catch((error) => {
+      logImageJob(jobId, "generated.publish.failed", { error: getErrorMessage(error) });
+    });
+  }
   void saveJobsSoon();
+}
+
+async function publishGeneratedWorkFromJob(jobId: string, job: ImageJob) {
+  const resultUrl = job.resultUrl;
+  if (!resultUrl) return null;
+  const mediaType = getJobMediaType(job);
+  const meta = getJobRecoveryMetadata(job);
+  return publishGeneratedWork({
+    itemId: jobId,
+    mediaType,
+    url: resultUrl,
+    prompt: meta.prompt || "",
+    model: meta.model,
+    aspectRatio: typeof job.request.payload.aspect_ratio === "string"
+      ? job.request.payload.aspect_ratio
+      : typeof job.request.payload.aspectRatio === "string"
+        ? job.request.payload.aspectRatio
+        : undefined,
+    resolution: meta.size,
+    metadata: {
+      endpoint: job.request.endpoint,
+      providerId: job.provider.id,
+      providerName: job.provider.name,
+    },
+  });
 }
 
 function getJobMediaType(job: ImageJob): MediaJobType {

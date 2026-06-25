@@ -1,7 +1,10 @@
 const API_BASE = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "";
 
-export type CollectionProvider = "civitai" | "lexica";
+export type CollectionProvider = "civitai" | "lexica" | "generated";
 export type CollectionWorkStatus = "pending" | "published" | "rejected" | "broken";
+export type CivitaiSort = "Most Reactions" | "Most Comments" | "Most Collected" | "Newest";
+export type CivitaiPeriod = "Day" | "Week" | "Month" | "Year" | "AllTime";
+export type GeneratedMediaType = "image" | "video";
 
 export type CollectionSource = {
   id: string;
@@ -9,6 +12,8 @@ export type CollectionSource = {
   name: string;
   query: string;
   enabled: boolean;
+  sort?: CivitaiSort;
+  period?: CivitaiPeriod;
   targetCategoryId?: string;
   targetCategoryName?: string;
   targetTags: string[];
@@ -49,12 +54,48 @@ export type CollectionClassifierSettings = {
   classificationPrompt: string;
 };
 
+export type CollectionCategoryConfig = {
+  id: string;
+  name: string;
+  keywords: string[];
+  custom?: boolean;
+};
+
+export type GeneratedPublishSettings = {
+  enabled: boolean;
+  autoPublish: boolean;
+  mediaTypes: GeneratedMediaType[];
+  defaultCategoryId: string;
+  defaultCategoryName: string;
+  categories: CollectionCategoryConfig[];
+};
+
 export const DEFAULT_COLLECTION_CLASSIFIER_SETTINGS: CollectionClassifierSettings = {
   enabled: false,
   visionModelValue: "",
   modelId: "",
   classificationPrompt:
     '你是 AI 作品采集分类器。请根据图片、prompt、模型和标签，把作品归入一个首页主分类。只能返回 JSON：{"categoryId":"portrait|character|scene|product|poster|illustration|style|anime|cg|chinese","categoryName":"中文分类名","tags":["标签1","标签2"],"confidence":0-1}。',
+};
+
+export const DEFAULT_GENERATED_PUBLISH_SETTINGS: GeneratedPublishSettings = {
+  enabled: true,
+  autoPublish: true,
+  mediaTypes: ["image"],
+  defaultCategoryId: "style",
+  defaultCategoryName: "风格",
+  categories: [
+    { id: "portrait", name: "人像", keywords: ["portrait", "face", "人像", "头像"] },
+    { id: "character", name: "角色", keywords: ["character", "role", "角色", "人物"] },
+    { id: "scene", name: "场景", keywords: ["landscape", "scene", "interior", "场景", "风景"] },
+    { id: "product", name: "产品", keywords: ["product", "packshot", "商品", "产品"] },
+    { id: "poster", name: "海报", keywords: ["poster", "banner", "海报", "封面"] },
+    { id: "illustration", name: "插画", keywords: ["illustration", "drawing", "插画"] },
+    { id: "style", name: "风格", keywords: ["style", "aesthetic", "风格"] },
+    { id: "anime", name: "二次元", keywords: ["anime", "manga", "二次元", "动漫"] },
+    { id: "cg", name: "3D/CG", keywords: ["3d", "cg", "render", "渲染"] },
+    { id: "chinese", name: "国风", keywords: ["chinese", "hanfu", "国风", "古风"] },
+  ],
 };
 
 export type CollectionWork = {
@@ -155,6 +196,51 @@ export async function updateCollectionClassifierSettings(settings: CollectionCla
   return readJson<CollectionClassifierSettings>(response);
 }
 
+export async function fetchGeneratedPublishSettings() {
+  try {
+    const response = await fetch(`${API_BASE}/api/collection/generated-publish-settings`, { cache: "no-store" });
+    return readJson<GeneratedPublishSettings>(response);
+  } catch {
+    return DEFAULT_GENERATED_PUBLISH_SETTINGS;
+  }
+}
+
+export async function updateGeneratedPublishSettings(settings: GeneratedPublishSettings) {
+  const response = await fetch(`${API_BASE}/api/collection/generated-publish-settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings),
+  });
+  return readJson<GeneratedPublishSettings>(response);
+}
+
+export async function publishGeneratedWork(input: {
+  itemId?: string;
+  projectId?: string;
+  userId?: string;
+  mediaType: GeneratedMediaType;
+  url: string;
+  prompt: string;
+  negativePrompt?: string;
+  model?: string;
+  categoryId?: string;
+  categoryName?: string;
+  status?: "pending" | "published";
+  manual?: boolean;
+  aspectRatio?: string;
+  width?: number;
+  height?: number;
+  resolution?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  const response = await fetch(`${API_BASE}/api/generated-works/publish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return readJson<{ ok: true; work: CollectionWork | null }>(response);
+}
+
 export async function deleteCollectionSource(id: string) {
   const response = await fetch(`${API_BASE}/api/collection/sources/${encodeURIComponent(id)}`, { method: "DELETE" });
   return readJson<{ ok: true; deleted: boolean }>(response);
@@ -168,10 +254,45 @@ export async function fetchCollectionRuns(input: { sourceId?: string; limit?: nu
   return readJson<{ runs: CollectionRun[] }>(response);
 }
 
+export async function deleteCollectionRun(id: string) {
+  const response = await fetch(`${API_BASE}/api/collection/runs/${encodeURIComponent(id)}`, { method: "DELETE" });
+  return readJson<{ ok: true; deleted: boolean }>(response);
+}
+
+export async function clearCollectionRuns(input: { sourceId?: string } = {}) {
+  const params = new URLSearchParams();
+  if (input.sourceId) params.set("sourceId", input.sourceId);
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  const response = await fetch(`${API_BASE}/api/collection/runs${suffix}`, { method: "DELETE" });
+  return readJson<{ ok: true; deleted: number }>(response);
+}
+
+export type CivitaiTokenStatus = { configured: boolean; hint: string };
+
+export async function fetchCivitaiTokenStatus() {
+  try {
+    const response = await fetch(`${API_BASE}/api/collection/civitai-token`, { cache: "no-store" });
+    return readJson<CivitaiTokenStatus>(response);
+  } catch {
+    return { configured: false, hint: "" } satisfies CivitaiTokenStatus;
+  }
+}
+
+export async function updateCivitaiToken(token: string) {
+  const response = await fetch(`${API_BASE}/api/collection/civitai-token`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+  return readJson<CivitaiTokenStatus>(response);
+}
+
 export async function createCollectionSource(input: {
   provider: CollectionProvider;
   name?: string;
   query: string;
+  sort?: CivitaiSort;
+  period?: CivitaiPeriod;
   targetCategoryId?: string;
   targetCategoryName?: string;
   targetTags?: string[];
@@ -195,7 +316,7 @@ export async function runCollectionSource(id: string) {
   return readJson<{ ok: true; fetched: number; added: number; skipped: number; source: CollectionSource }>(response);
 }
 
-export async function updateCollectionSource(id: string, input: Partial<Pick<CollectionSource, "enabled" | "autoPublish" | "filterNsfw" | "maxItemsPerRun" | "scheduleEveryHours">>) {
+export async function updateCollectionSource(id: string, input: Partial<Pick<CollectionSource, "enabled" | "autoPublish" | "filterNsfw" | "maxItemsPerRun" | "scheduleEveryHours" | "sort" | "period">>) {
   const response = await fetch(`${API_BASE}/api/collection/sources/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
