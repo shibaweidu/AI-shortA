@@ -132,7 +132,7 @@ export default function AdminPackages() {
               </Button>
               {editingPackageId ? <Button type="button" onClick={resetPackageForm} className="rounded-xl bg-white/[0.06] text-white hover:bg-white/[0.10]">取消</Button> : null}
             </div>
-            {message ? <div className="text-sm text-amber-200">{message}</div> : null}
+            {message ? <div className="text-sm text-cyan-200">{message}</div> : null}
           </div>
         </section>
 
@@ -150,7 +150,7 @@ export default function AdminPackages() {
                 </div>
                 <div className="mt-4 flex items-end justify-between gap-3">
                   <div className="text-2xl font-semibold text-cyan-200">{getCreditPackageTotal(pkg)} <span className="text-xs text-[#8f97aa]">积分</span></div>
-                  <div className="text-sm font-medium text-amber-200">¥{(pkg.price ?? 0).toFixed(2)}</div>
+                  <div className="text-sm font-medium text-cyan-200">¥{(pkg.price ?? 0).toFixed(2)}</div>
                 </div>
                 {pkg.discountText ? <div className="mt-2 text-xs text-emerald-300">{pkg.discountText}</div> : null}
                 {pkg.purchaseUrl ? <div className="mt-1 truncate text-xs text-[#8f97aa]">购买链接：{pkg.purchaseUrl}</div> : null}

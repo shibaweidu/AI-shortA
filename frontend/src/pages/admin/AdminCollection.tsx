@@ -1030,7 +1030,7 @@ export default function AdminCollection() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="text-sm font-medium">{run.provider} · {run.query}</div>
                     <div className="flex items-center gap-2">
-                      <span className={`rounded-full px-3 py-1 text-xs ${run.status === "completed" ? "bg-emerald-500/10 text-emerald-200" : run.status === "failed" ? "bg-red-500/10 text-red-200" : "bg-yellow-500/10 text-yellow-100"}`}>
+                      <span className={`rounded-full px-3 py-1 text-xs ${run.status === "completed" ? "bg-emerald-500/10 text-emerald-200" : run.status === "failed" ? "bg-red-500/10 text-red-200" : "bg-cyan-500/10 text-cyan-100"}`}>
                         {run.status === "completed" ? "完成" : run.status === "failed" ? "失败" : "运行中"}
                       </span>
                       {run.status !== "running" ? (
@@ -1115,7 +1115,7 @@ export default function AdminCollection() {
                     size="sm"
                     variant="outline"
                     onClick={() => void handleToggleFeatured(work)}
-                    className={`${work.featured ? "border-amber-300/30 bg-amber-300/10 text-amber-100" : "border-white/[0.08] bg-white/[0.03] text-white"} hover:bg-white/[0.06]`}
+                    className={`${work.featured ? "border-cyan-300/30 bg-cyan-300/10 text-cyan-100" : "border-white/[0.08] bg-white/[0.03] text-white"} hover:bg-white/[0.06]`}
                   >
                     <Star className="mr-1 h-3.5 w-3.5" />
                     {work.featured ? "取消置顶" : "置顶"}

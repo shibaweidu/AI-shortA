@@ -22,16 +22,16 @@ const palettes: Record<ModelType, string[]> = {
     "from-blue-500 via-indigo-500 to-fuchsia-600",
   ],
   image: [
-    "from-fuchsia-500 via-violet-500 to-amber-300",
+    "from-fuchsia-500 via-violet-500 to-cyan-300",
     "from-cyan-400 via-sky-500 to-indigo-700",
     "from-emerald-400 via-teal-500 to-cyan-700",
     "from-pink-500 via-rose-500 to-orange-400",
   ],
   video: [
-    "from-orange-400 via-amber-500 to-red-600",
+    "from-orange-400 via-cyan-500 to-red-600",
     "from-pink-400 via-rose-500 to-orange-500",
     "from-sky-400 via-blue-500 to-indigo-600",
-    "from-red-500 via-orange-500 to-yellow-400",
+    "from-red-500 via-orange-500 to-cyan-400",
   ],
   audio: [
     "from-fuchsia-500 via-pink-500 to-rose-500",

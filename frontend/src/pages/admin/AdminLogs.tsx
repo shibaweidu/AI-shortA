@@ -169,7 +169,7 @@ export default function AdminLogs() {
       ) : null}
 
       {logData?.truncated ? (
-        <div className="mb-5 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+        <div className="mb-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-100">
           当前只展示日志尾部内容。
         </div>
       ) : null}

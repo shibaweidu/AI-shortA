@@ -336,7 +336,7 @@ export default function Settings({
   const customProviders = getCustomProviders();
 
   const [view, setView] = useState<PageView>(initialView);
-  const [newProvider, setNewProvider] = useState({ name: "", baseUrl: "", key: "", logAccessToken: "", useReferenceImagesParam: false });
+  const [newProvider, setNewProvider] = useState({ name: "", baseUrl: "", key: "", useReferenceImagesParam: false });
   const [addProviderOpen, setAddProviderOpen] = useState(false);
   const [selectedProviderId, setSelectedProviderId] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -362,12 +362,11 @@ export default function Settings({
       name: newProvider.name.trim() || `供应商 ${providers.length + 1}`,
       baseUrl: newProvider.baseUrl.trim(),
       key: newProvider.key.trim(),
-      logAccessToken: newProvider.logAccessToken.trim() || undefined,
       useReferenceImagesParam: newProvider.useReferenceImagesParam,
     });
     setExpanded((prev) => ({ ...prev, [providerId]: true }));
     setSelectedProviderId(providerId);
-    setNewProvider({ name: "", baseUrl: "", key: "", logAccessToken: "", useReferenceImagesParam: false });
+    setNewProvider({ name: "", baseUrl: "", key: "", useReferenceImagesParam: false });
     setAddProviderOpen(false);
   };
 
@@ -603,24 +602,14 @@ export default function Settings({
                   <p className="text-xs text-[#8f97aa]">多行时会按请求轮询使用；单行保持原逻辑。</p>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-white">日志访问令牌</label>
-                  <Input
-                    type="password"
-                    value={newProvider.logAccessToken}
-                    onChange={(event) => setNewProvider((prev) => ({ ...prev, logAccessToken: event.target.value }))}
-                    placeholder="可选，用于 524 后查询日志"
-                    className={INPUT_CLASS_NAME}
-                  />
-                </div>
-<div className="space-y-2">
-<label className="text-sm font-medium text-white">参考图传递方式</label>
-<Button
+                  <label className="text-sm font-medium text-white">参考图传递方式</label>
+                  <Button
                     type="button"
                     variant="outline"
                     className={cn(
                       "w-full justify-start text-left",
                       newProvider.useReferenceImagesParam 
-                        ? "border-blue-500 bg-blue-500/10 text-blue-400" 
+                        ? "border-cyan-400 bg-cyan-400/10 text-cyan-300" 
                         : "border-white/10 bg-white/5 text-white"
                     )}
                     onClick={() => setNewProvider((prev) => ({ ...prev, useReferenceImagesParam: !prev.useReferenceImagesParam }))}
@@ -691,7 +680,7 @@ export default function Settings({
                       <div className="mt-2 truncate text-xs text-[#8f97aa]">{provider.baseUrl || "尚未填写 Base URL"}</div>
                       <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-[#8f97aa]">
                         <span className="rounded-full bg-white/[0.06] px-2 py-0.5">{totalFlowModels} 个模型</span>
-                        <span className={getProviderKeyCount(provider.key) ? "rounded-full bg-emerald-400/10 px-2 py-0.5 text-emerald-200" : "rounded-full bg-amber-400/10 px-2 py-0.5 text-amber-200"}>
+                        <span className={getProviderKeyCount(provider.key) ? "rounded-full bg-emerald-400/10 px-2 py-0.5 text-emerald-200" : "rounded-full bg-cyan-400/10 px-2 py-0.5 text-cyan-200"}>
                           {getProviderKeyCount(provider.key) ? `${getProviderKeyCount(provider.key)} Key` : "未配置 Key"}
                         </span>
                       </div>
@@ -793,16 +782,6 @@ export default function Settings({
                         <p className="text-xs text-[#8f97aa]">多行时按请求轮询使用。</p>
                       </div>
                       <div className="space-y-2">
-                        <label className="text-sm font-medium text-white">日志访问令牌</label>
-                        <Input
-                          type="password"
-                          value={provider.logAccessToken ?? ""}
-                          onChange={(event) => updateProvider(provider.id, { logAccessToken: event.target.value.trim() || undefined })}
-                          placeholder="可选，用于 524 后查询日志"
-                          className={INPUT_CLASS_NAME}
-                        />
-                      </div>
-                      <div className="space-y-2">
                         <label className="text-sm font-medium text-white">参考图传递方式</label>
                         <Button
                           type="button"
@@ -810,7 +789,7 @@ export default function Settings({
                           className={cn(
                             "w-full justify-start text-left",
                             provider.useReferenceImagesParam 
-                              ? "border-blue-500 bg-blue-500/10 text-blue-400" 
+                              ? "border-cyan-400 bg-cyan-400/10 text-cyan-300" 
                               : "border-white/10 bg-white/5 text-white"
                           )}
                           onClick={() => updateProvider(provider.id, { useReferenceImagesParam: !provider.useReferenceImagesParam })}
@@ -1129,7 +1108,7 @@ export default function Settings({
                                     {tag}
                                   </span>
                                 ))}
-                                {model.credits !== undefined && model.credits > 0 ? <span className="rounded-full bg-amber-400/10 px-2 py-0.5 text-[10px] text-amber-300">{model.credits} 积分</span> : null}
+                                {model.credits !== undefined && model.credits > 0 ? <span className="rounded-full bg-cyan-400/10 px-2 py-0.5 text-[10px] text-cyan-300">{model.credits} 积分</span> : null}
                               </div>
                             </div>
                           </div>

@@ -67,7 +67,7 @@ export default function Credits() {
 
         <section className="mb-5 rounded-[30px] border border-white/[0.08] bg-[#11141b] p-5">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-400/10 text-amber-300">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-300">
               <Ticket className="h-5 w-5" />
             </div>
             <div>
@@ -117,7 +117,7 @@ export default function Credits() {
                       <div className="mt-1 text-xs leading-5 text-[#8f97aa]">{pkg.description || "暂无说明"}</div>
                     </div>
                     <div className="flex shrink-0 flex-col items-end gap-1 text-right">
-                      <div className="text-xl font-semibold text-amber-200">¥{(pkg.price ?? 0).toFixed(2)}</div>
+                      <div className="text-xl font-semibold text-cyan-200">¥{(pkg.price ?? 0).toFixed(2)}</div>
                       {pkg.discountText ? (
                         <div className="inline-flex rounded-lg bg-cyan-400/15 px-3 py-1 text-sm font-semibold text-cyan-200 ring-1 ring-cyan-300/20">
                           {pkg.discountText}
@@ -174,7 +174,7 @@ export default function Credits() {
                       <div className="text-white">{transactionLabels[item.type]}</div>
                       <div className="mt-1 text-xs text-[#7f8798]">{item.note}</div>
                     </div>
-                    <div className={item.amount > 0 ? "font-medium text-emerald-300" : "font-medium text-amber-300"}>{item.amount > 0 ? "+" : ""}{item.amount}</div>
+                    <div className={item.amount > 0 ? "font-medium text-emerald-300" : "font-medium text-cyan-300"}>{item.amount > 0 ? "+" : ""}{item.amount}</div>
                     <div className="text-xs text-[#8f97aa]">{new Date(item.createdAt).toLocaleString("zh-CN")}</div>
                   </div>
                 ))

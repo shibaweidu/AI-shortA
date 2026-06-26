@@ -1688,7 +1688,7 @@ export function FlowGeneratorBar({
               <Wand2 className="h-4 w-4 text-white/80" />
             )}
             <span className="whitespace-nowrap md:truncate">{selectedModelOption?.label ?? "选择模型"}</span>
-            {estimatedCredits !== undefined && estimatedCredits > 0 ? <span className="shrink-0 text-[11px] text-amber-300">{estimatedCredits}</span> : null}
+            {estimatedCredits !== undefined && estimatedCredits > 0 ? <span className="shrink-0 text-[11px] text-cyan-300">{estimatedCredits}</span> : null}
           </button>
 
           {openGeneratorPanel === "model" ? (
@@ -1745,7 +1745,7 @@ export function FlowGeneratorBar({
                                 {option.source === "custom" ? "自定义" : "考拉AI"}
                               </div>
                               {option.credits !== undefined && option.credits > 0 ? (
-                                <div className="shrink-0 rounded-full bg-amber-400/10 px-2 py-0.5 text-[11px] font-[500] text-amber-300">
+                                <div className="shrink-0 rounded-full bg-cyan-400/10 px-2 py-0.5 text-[11px] font-[500] text-cyan-300">
                                   默认 {option.credits} {type === "video" ? "积分/秒" : "积分"}
                                 </div>
                               ) : null}
@@ -2299,7 +2299,7 @@ export function FlowGeneratorBar({
 
         <div className="ml-auto flex shrink-0 items-center gap-3">
           {estimatedCredits !== undefined && estimatedCredits > 0 ? (
-            <div className="hidden rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1.5 text-xs text-amber-100 md:block">
+            <div className="hidden rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-xs text-cyan-100 md:block">
               预计消耗 {estimatedCredits} 积分
             </div>
           ) : null}

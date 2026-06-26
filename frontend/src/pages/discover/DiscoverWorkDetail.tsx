@@ -256,7 +256,7 @@ export default function DiscoverWorkDetail() {
               </div>
               <p className="whitespace-pre-wrap text-sm leading-7 text-[#e4e8f0]">{detailWork.prompt || "暂无提示词"}</p>
               {detailWork.promptHint ? (
-                <div className="mt-3 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-xs leading-6 text-amber-100">
+                <div className="mt-3 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-3 text-xs leading-6 text-cyan-100">
                   {detailWork.promptHint}
                 </div>
               ) : null}

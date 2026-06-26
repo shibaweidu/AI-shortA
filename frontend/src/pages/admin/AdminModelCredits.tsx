@@ -151,7 +151,7 @@ export default function AdminModelCredits() {
 
         <CreditSection
           title="视频模型每秒积分"
-          iconClassName="text-amber-300"
+          iconClassName="text-cyan-300"
           models={videoModels}
           options={VIDEO_CREDITS_PER_SECOND_OPTIONS}
           rules={rules}

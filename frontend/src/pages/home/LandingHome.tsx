@@ -696,7 +696,7 @@ export default function LandingHome() {
           ) : null}
 
           {feedError ? (
-            <div className="mt-4 rounded-2xl border border-yellow-400/20 bg-yellow-500/10 p-4 text-sm text-yellow-100">
+            <div className="mt-4 rounded-2xl border border-cyan-400/20 bg-cyan-500/10 p-4 text-sm text-cyan-100">
               推荐流加载失败：{feedError}
             </div>
           ) : null}

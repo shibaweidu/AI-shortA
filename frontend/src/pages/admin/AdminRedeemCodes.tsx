@@ -87,7 +87,7 @@ export default function AdminRedeemCodes() {
       <section className="rounded-[28px] border border-white/[0.08] bg-[#11141b] p-5">
         <div className="mb-5 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <Ticket className="h-5 w-5 text-amber-300" />
+            <Ticket className="h-5 w-5 text-cyan-300" />
             <h2 className="text-lg font-semibold">批量生成兑换码</h2>
           </div>
           <Button type="button" onClick={() => void copyCodes(filteredCodes)} className="rounded-xl bg-white/[0.06] text-white hover:bg-white/[0.10]">
@@ -103,7 +103,7 @@ export default function AdminRedeemCodes() {
           </select>
           <Input type="number" min={1} max={1000} value={codeQuantity} onChange={(e) => setCodeQuantity(Number(e.target.value))} placeholder="数量" className={inputClass} />
           <Input type="date" value={expiresAtText} onChange={(e) => setExpiresAtText(e.target.value)} className={inputClass} />
-          <Button type="button" onClick={handleGenerateCodes} disabled={!codePackageId} className="rounded-xl bg-amber-300 text-black hover:bg-amber-200">
+          <Button type="button" onClick={handleGenerateCodes} disabled={!codePackageId} className="rounded-xl bg-cyan-300 text-black hover:bg-cyan-200">
             生成兑换码
           </Button>
           <Input value={batchName} onChange={(e) => setBatchName(e.target.value)} placeholder="批次名称，例如 淘宝 2026-05" className={`${inputClass} md:col-span-2`} />
@@ -122,23 +122,23 @@ export default function AdminRedeemCodes() {
         </div>
 
         {lastGeneratedCodes.length ? (
-          <div className="mt-5 rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4">
+          <div className="mt-5 rounded-2xl border border-cyan-300/20 bg-cyan-300/10 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-medium text-white">本次生成的兑换码</div>
-                <div className="mt-1 text-xs text-amber-100/70">共 {lastGeneratedCodes.length} 个，可直接复制到外部平台。</div>
+                <div className="mt-1 text-xs text-cyan-100/70">共 {lastGeneratedCodes.length} 个，可直接复制到外部平台。</div>
               </div>
-              <Button type="button" onClick={() => void copyCodes(lastGeneratedCodes)} className="h-9 rounded-xl bg-amber-300 px-3 text-black hover:bg-amber-200">
+              <Button type="button" onClick={() => void copyCodes(lastGeneratedCodes)} className="h-9 rounded-xl bg-cyan-300 px-3 text-black hover:bg-cyan-200">
                 一键复制
               </Button>
             </div>
-            <div className="max-h-40 overflow-y-auto rounded-xl bg-black/20 p-3 font-mono text-xs leading-6 text-amber-50">
+            <div className="max-h-40 overflow-y-auto rounded-xl bg-black/20 p-3 font-mono text-xs leading-6 text-cyan-50">
               {lastGeneratedCodes.map((code) => <div key={code.id}>{code.code}</div>)}
             </div>
           </div>
         ) : null}
 
-        {copyMessage ? <div className="mt-3 text-sm text-amber-200">{copyMessage}</div> : null}
+        {copyMessage ? <div className="mt-3 text-sm text-cyan-200">{copyMessage}</div> : null}
       </section>
 
       <section className="mt-6 rounded-[28px] border border-white/[0.08] bg-[#11141b] p-5">
