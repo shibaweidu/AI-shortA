@@ -632,20 +632,7 @@ export default function Settings({
                       ? "参考图将通过 reference_images 参数传递到 /images/generations 端点（推荐用于 New API）" 
                       : "参考图将通过 FormData 上传到 /images/edits 端点（标准 OpenAI 格式）"}
                   </p>
-</div>
-
- <div className="space-y-2">
- <label className="text-sm font-medium text-white">参考图传递方式（备用选择）</label>
- <select
- value={newProvider.useReferenceImagesParam ? "reference_images" : "images_edits"}
- onChange={(event) => setNewProvider((prev) => ({ ...prev, useReferenceImagesParam: event.target.value === "reference_images" }))}
- className={INPUT_CLASS_NAME}
- >
- <option value="images_edits">使用 /images/edits端点</option>
- <option value="reference_images">使用 reference_images 参数</option>
- </select>
- </div>
-
+                </div>
 <div className="flex justify-end gap-2">
                   <Button variant="outline" className={OUTLINE_BUTTON_CLASS_NAME} onClick={() => setAddProviderOpen(false)}>
                     取消
@@ -834,19 +821,8 @@ export default function Settings({
                           {provider.useReferenceImagesParam 
                             ? "参考图将通过 reference_images 参数传递到 /images/generations 端点" 
                             : "参考图将通过 FormData 上传到 /images/edits 端点"}
-</p>
-</div>
- <div className="space-y-2">
- <label className="text-sm font-medium text-white">参考图传递方式（备用选择）</label>
- <select
- value={provider.useReferenceImagesParam ? "reference_images" : "images_edits"}
- onChange={(event) => updateProvider(provider.id, { useReferenceImagesParam: event.target.value === "reference_images" })}
- className={INPUT_CLASS_NAME}
- >
- <option value="images_edits">使用 /images/edits端点</option>
- <option value="reference_images">使用 reference_images 参数</option>
- </select>
- </div>
+                        </p>
+                      </div>
 </div>
 
                     {libraryStatus[provider.id] ? (
