@@ -130,7 +130,7 @@ function createCode() {
 }
 
 function normalizeAmount(value: number) {
-  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+  return Number.isFinite(value) ? Math.max(0, Math.round(value * 10000) / 10000) : 0;
 }
 
 function normalizePackageInput(input: PackageInput): PackageInput {
@@ -456,7 +456,7 @@ export const useCreditStore = create<CreditState>()(
       },
       adjustCredits: (userId, rawAmount, note) => {
         const now = Date.now();
-        const amount = Math.floor(rawAmount);
+        const amount = Number.isFinite(rawAmount) ? Math.round(rawAmount * 10000) / 10000 : 0;
         if (!Number.isFinite(amount) || amount === 0) return;
 
         set((state) => {

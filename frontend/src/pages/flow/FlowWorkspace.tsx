@@ -118,7 +118,7 @@ export default function FlowWorkspace() {
         resolution,
       })
     : undefined;
-  const estimatedCredits = estimatedCreditsPerItem !== undefined ? estimatedCreditsPerItem * generationCount : undefined;
+  const estimatedCredits = estimatedCreditsPerItem !== undefined ? Math.round(estimatedCreditsPerItem * generationCount * 10000) / 10000 : undefined;
   const canGenerate = (!!prompt.trim() || referenceImages.length > 0) && !!model;
 
   useEffect(() => {

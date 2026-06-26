@@ -27,7 +27,7 @@ type PersistedModelCreditState = Pick<ModelCreditState, "rules">;
 
 function normalizeCredits(value: number) {
   if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.floor(value));
+  return Math.max(0, Math.round(value * 10000) / 10000);
 }
 
 function parseDurationSeconds(value?: string) {

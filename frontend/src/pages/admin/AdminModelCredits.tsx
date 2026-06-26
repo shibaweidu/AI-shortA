@@ -84,6 +84,7 @@ function CreditSection({ title, iconClassName, models, options, rules, emptyText
                         <Input
                           type="number"
                           min={0}
+                          step="0.01"
                           value={getValue(rule, option.value) ?? ""}
                           onChange={(event) => onChange(model.value, option.value, Number(event.target.value))}
                           placeholder="0"

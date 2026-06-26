@@ -76,9 +76,10 @@ export default function AdminUsers() {
                   <div className="flex flex-wrap justify-end gap-2">
                     <Input
                       type="number"
+                      step="0.01"
                       value={adjustValue}
                       onChange={(event) => setAdjustByUserId((current) => ({ ...current, [user.id]: event.target.value }))}
-                      placeholder="调整积分，如 100 或 -50"
+                      placeholder="调整积分，如 100、0.5 或 -50"
                       className="h-9 w-48 border-white/[0.08] bg-white/[0.03] text-white placeholder:text-[#667085]"
                     />
                     <Button

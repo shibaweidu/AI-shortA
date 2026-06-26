@@ -110,8 +110,8 @@ export default function AdminPackages() {
             <Input value={packageForm.name} onChange={(e) => setPackageForm((v) => ({ ...v, name: e.target.value }))} placeholder="套餐名称" className={inputClass} />
             <Input value={packageForm.description} onChange={(e) => setPackageForm((v) => ({ ...v, description: e.target.value }))} placeholder="套餐描述" className={inputClass} />
             <div className="grid grid-cols-2 gap-3">
-              <Input type="number" value={packageForm.credits} onChange={(e) => setPackageForm((v) => ({ ...v, credits: Number(e.target.value) }))} placeholder="积分数量" className={inputClass} />
-              <Input type="number" value={packageForm.bonusCredits} onChange={(e) => setPackageForm((v) => ({ ...v, bonusCredits: Number(e.target.value) }))} placeholder="赠送积分" className={inputClass} />
+              <Input type="number" step="0.01" value={packageForm.credits} onChange={(e) => setPackageForm((v) => ({ ...v, credits: Number(e.target.value) }))} placeholder="积分数量" className={inputClass} />
+              <Input type="number" step="0.01" value={packageForm.bonusCredits} onChange={(e) => setPackageForm((v) => ({ ...v, bonusCredits: Number(e.target.value) }))} placeholder="赠送积分" className={inputClass} />
             </div>
             <Input type="number" value={packageForm.price} onChange={(e) => setPackageForm((v) => ({ ...v, price: Number(e.target.value) }))} placeholder="价格，例如 9.9" className={inputClass} />
             <Input value={packageForm.discountText} onChange={(e) => setPackageForm((v) => ({ ...v, discountText: e.target.value }))} placeholder="折扣信息，例如 限时 8 折" className={inputClass} />

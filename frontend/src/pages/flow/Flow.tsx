@@ -250,7 +250,7 @@ export default function Flow() {
         duration: type === "video" ? duration : undefined,
       })
     : undefined;
-  const estimatedCredits = estimatedCreditsPerItem !== undefined ? estimatedCreditsPerItem * generationCount : undefined;
+  const estimatedCredits = estimatedCreditsPerItem !== undefined ? Math.round(estimatedCreditsPerItem * generationCount * 10000) / 10000 : undefined;
 
   const totalImages = projectItems.filter((item) => item.type === "image").length;
   const totalVideos = projectItems.filter((item) => item.type === "video").length;
