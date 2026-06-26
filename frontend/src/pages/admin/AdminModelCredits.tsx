@@ -9,6 +9,7 @@ import { useSettingsStore } from "../../store/settingsStore";
 
 const inputClass = "h-8 rounded-lg border-white/[0.08] bg-white/[0.035] px-2 text-sm text-white placeholder:text-[#667085]";
 const VIDEO_CREDITS_PER_SECOND_OPTIONS: GeneratorOption[] = [{ value: "perSecond", label: "每秒" }];
+const TEXT_CREDITS_PER_USE_OPTIONS: GeneratorOption[] = [{ value: "perUse", label: "每次" }];
 
 type CreditSectionProps = {
   title: string;
@@ -115,8 +116,9 @@ function CreditSection({ title, iconClassName, models, options, rules, emptyText
 
 export default function AdminModelCredits() {
   const { providers, routing } = useSettingsStore();
-  const { rules, setImageCredits, setVideoCreditsPerSecond, clearRule } = useModelCreditStore();
+  const { rules, setImageCredits, setVideoCreditsPerSecond, setTextCreditsPerUse, clearRule } = useModelCreditStore();
 
+  const textModels = useMemo(() => buildModelCatalogOptions(providers, routing, "language"), [providers, routing]);
   const imageModels = useMemo(() => buildModelCatalogOptions(providers, routing, "image"), [providers, routing]);
   const videoModels = useMemo(() => buildModelCatalogOptions(providers, routing, "video"), [providers, routing]);
 
@@ -126,7 +128,7 @@ export default function AdminModelCredits() {
         <div>
           <h1 className="text-xl font-semibold text-white">模型积分设置</h1>
           <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[#8f97aa]">
-            为同一个模型配置不同图片分辨率下的消耗积分；视频模型按每秒积分计算。未配置或设置为 0 时不消耗积分。
+            为文本模型配置每次消耗积分，为图片模型配置不同分辨率下的消耗积分；视频模型按每秒积分计算。未配置或设置为 0 时不消耗积分。
           </p>
         </div>
         <div className="flex h-9 items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3">
@@ -136,6 +138,19 @@ export default function AdminModelCredits() {
       </div>
 
       <div className="w-fit max-w-full space-y-4">
+        <CreditSection
+          title="文本模型每次积分"
+          iconClassName="text-cyan-300"
+          models={textModels}
+          options={TEXT_CREDITS_PER_USE_OPTIONS}
+          rules={rules}
+          emptyText="暂无文本模型，请先到模型管理添加并启用模型。"
+          defaultText={() => "未配置：0 积分/次"}
+          getValue={(rule) => rule?.textCreditsPerUse}
+          onChange={(modelValue, _optionValue, credits) => setTextCreditsPerUse(modelValue, credits)}
+          onClear={clearRule}
+        />
+
         <CreditSection
           title="图片模型积分"
           iconClassName="text-cyan-300"

@@ -5,6 +5,9 @@ import { useFlowStore } from '../../store/flowStore';
 import { streamAgentMessage, uploadImageFiles } from '../../services/agent';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useUserModelStore } from '../../store/userModelStore';
+import { useAuthStore } from '../../store/authStore';
+import { useCreditStore } from '../../store/creditStore';
+import { getModelCreditCost, useModelCreditStore } from '../../store/modelCreditStore';
 import { buildGeneratorModelOptions } from '../../lib/generatorOptions';
 import { buildModelCatalogOptions, getPreferredModelValue } from '../../lib/modelCatalog';
 import { parseSourcedProviderModelValue } from '../../lib/providerModels';
@@ -120,6 +123,9 @@ export function AgentChat() {
   } = useAgentStore();
   const { providers, routing } = useSettingsStore();
   const { providers: userProviders, routing: userRouting } = useUserModelStore();
+  const { currentUserId } = useAuthStore();
+  const { spendCredits, refundCredits } = useCreditStore();
+  const { rules: modelCreditRules } = useModelCreditStore();
   const { projects, items } = useFlowStore();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -154,6 +160,12 @@ export function AgentChat() {
     [providers, routing, userProviders, userRouting]
   );
   const selectedModelOption = modelOptions.find((model) => model.value === selectedModel) ?? modelOptions[0];
+  const selectedModelValue = selectedModel || selectedModelOption?.value || '';
+  const selectedParsedModel = selectedModelValue ? parseSourcedProviderModelValue(selectedModelValue) : null;
+  const isCustomModel = selectedParsedModel?.source === 'custom';
+  const estimatedCredits = selectedModelValue
+    ? getModelCreditCost({ rules: modelCreditRules, modelValue: selectedModelValue, type: 'text' })
+    : 0;
   const imageAssets = useMemo(() => {
     let list = items.filter((item) => item.type === 'image' && !!item.url);
     if (assetProjectId !== 'all') {
@@ -203,6 +215,18 @@ export function AgentChat() {
 
     const userMessage = input.trim();
     const messageAttachments = attachments;
+    const modelValueForRequest = selectedModelValue || selectedModelOption.value;
+    const modelLabel = selectedModelOption.label;
+    const textCreditCost = getModelCreditCost({ rules: modelCreditRules, modelValue: modelValueForRequest, type: 'text' });
+    if (!isCustomModel && textCreditCost > 0 && !currentUserId) {
+      addMessage(conversation.id, {
+        agentId: agent.id,
+        role: 'assistant',
+        content: '请先登录后再使用需要积分的文本模型。',
+      });
+      return;
+    }
+
     setInput('');
     setAttachments([]);
 
@@ -217,6 +241,8 @@ export function AgentChat() {
     let assistantMessageId: string | null = null;
     let streamedContent = '';
     let flushFrame: number | null = null;
+    let creditsSpent = false;
+    const creditTaskId = `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     const flushStreamedContent = () => {
       flushFrame = null;
@@ -230,7 +256,7 @@ export function AgentChat() {
     };
 
     try {
-      const modelValue = selectedModel || selectedModelOption.value;
+      const modelValue = modelValueForRequest;
       const parsedModel = parseSourcedProviderModelValue(modelValue);
       const providerList = parsedModel?.source === 'custom' ? userProviders : providers;
       const provider = parsedModel
@@ -241,6 +267,17 @@ export function AgentChat() {
         throw new Error('没有可用的文本模型供应商配置');
       }
       const requestProvider = withSelectedProviderKey(provider);
+
+      if (!isCustomModel && currentUserId && textCreditCost > 0) {
+        const spendResult = spendCredits({
+          userId: currentUserId,
+          amount: textCreditCost,
+          generationTaskId: creditTaskId,
+          note: `文本对话：${modelLabel}`,
+        });
+        if (!spendResult.ok) throw new Error(spendResult.message);
+        creditsSpent = true;
+      }
 
       const conversationHistory = conversation.messages.map((message) => ({
         role: message.role,
@@ -280,6 +317,10 @@ export function AgentChat() {
       updateMessage(conversation.id, assistantMessageId, { content: response.content || streamedContent });
     } catch (error) {
       console.error('Failed to send message:', error);
+      if (creditsSpent && currentUserId) {
+        refundCredits({ userId: currentUserId, amount: textCreditCost, generationTaskId: creditTaskId, note: `文本对话失败返还：${modelLabel}` });
+        creditsSpent = false;
+      }
       if (assistantMessageId) {
         updateMessage(conversation.id, assistantMessageId, {
           content: `抱歉，发生了错误：${error instanceof Error ? error.message : '未知错误'}`,
@@ -766,6 +807,9 @@ export function AgentChat() {
             </div>
 
             <div className="ml-auto flex shrink-0 items-center gap-3">
+              {!isCustomModel && estimatedCredits > 0 ? (
+                <span className="shrink-0 text-[11px] text-cyan-300">{estimatedCredits} 积分</span>
+              ) : null}
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || isLoading || !selectedModelOption}

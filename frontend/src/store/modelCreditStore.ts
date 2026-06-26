@@ -8,6 +8,7 @@ export interface ModelCreditRule {
   imageCreditsByResolution: Record<string, number>;
   videoCreditsByDuration: Record<string, number>;
   videoCreditsPerSecond?: number;
+  textCreditsPerUse?: number;
   updatedAt: number;
 }
 
@@ -18,6 +19,7 @@ interface ModelCreditState {
   setImageCredits: (modelValue: string, resolution: string, credits: number) => void;
   setVideoCredits: (modelValue: string, duration: string, credits: number) => void;
   setVideoCreditsPerSecond: (modelValue: string, credits: number) => void;
+  setTextCreditsPerUse: (modelValue: string, credits: number) => void;
   clearRule: (modelValue: string) => void;
 }
 
@@ -48,6 +50,12 @@ export function findModelCreditRule(rules: ModelCreditRule[], modelValue: string
     if (lookupValues.has(item.modelValue)) return true;
     return getModelCreditLookupValues(item.modelValue).some((value) => lookupValues.has(value));
   });
+}
+
+function isSameModelCreditRule(ruleModelValue: string, modelValue: string) {
+  const lookupValues = new Set(getModelCreditLookupValues(modelValue));
+  if (lookupValues.has(ruleModelValue)) return true;
+  return getModelCreditLookupValues(ruleModelValue).some((value) => lookupValues.has(value));
 }
 
 function upsertRule(rules: ModelCreditRule[], modelValue: string, updater: (rule: ModelCreditRule) => ModelCreditRule) {
@@ -102,7 +110,16 @@ export const useModelCreditStore = create<ModelCreditState>()(
           })),
         }));
       },
-      clearRule: (modelValue) => set((state) => ({ rules: state.rules.filter((rule) => rule.modelValue !== modelValue) })),
+      setTextCreditsPerUse: (modelValue, credits) => {
+        set((state) => ({
+          rules: upsertRule(state.rules, modelValue, (rule) => ({
+            ...rule,
+            textCreditsPerUse: normalizeCredits(credits),
+            updatedAt: Date.now(),
+          })),
+        }));
+      },
+      clearRule: (modelValue) => set((state) => ({ rules: state.rules.filter((rule) => !isSameModelCreditRule(rule.modelValue, modelValue)) })),
     }),
     {
       name: "koala-model-credit-store-v1",
@@ -118,7 +135,7 @@ export const useModelCreditStore = create<ModelCreditState>()(
 export function getModelCreditCost(input: {
   rules: ModelCreditRule[];
   modelValue: string;
-  type: "image" | "video";
+  type: "image" | "video" | "text";
   resolution?: string;
   duration?: string;
 }) {
@@ -131,6 +148,9 @@ export function getModelCreditCost(input: {
   if (input.type === "video") {
     const creditsPerSecond = typeof rule?.videoCreditsPerSecond === "number" ? rule.videoCreditsPerSecond : 0;
     return normalizeCredits(creditsPerSecond * parseDurationSeconds(input.duration));
+  }
+  if (input.type === "text") {
+    return typeof rule?.textCreditsPerUse === "number" ? rule.textCreditsPerUse : 0;
   }
   return 0;
 }
