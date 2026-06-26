@@ -24,6 +24,7 @@ import AdminCollection from "./pages/admin/AdminCollection";
 import AdminModels from "./pages/admin/AdminModels";
 import AdminModelCredits from "./pages/admin/AdminModelCredits";
 import AdminPackages from "./pages/admin/AdminPackages";
+import AdminPayment from "./pages/admin/AdminPayment";
 import AdminRedeemCodes from "./pages/admin/AdminRedeemCodes";
 import AdminSettings from "./pages/admin/AdminSettings";
 import AdminAgents from "./pages/admin/AdminAgents";
@@ -139,6 +140,10 @@ const router = createBrowserRouter([
       {
         path: "packages",
         element: <AdminPackages />,
+      },
+      {
+        path: "payment",
+        element: <AdminPayment />,
       },
       {
         path: "redeem-codes",

@@ -5,9 +5,11 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { getCreditPackageTotal, useCreditStore } from "../../store/creditStore";
 import { useAuthStore } from "../../store/authStore";
+import { createPaymentOrder } from "../../services/payment";
 
 const transactionLabels = {
   redeem_code: "兑换码兑换",
+  payment_purchase: "支付购买",
   generation_cost: "生成消耗",
   generation_refund: "失败返还",
   admin_adjust: "后台调整",
@@ -19,6 +21,7 @@ export default function Credits() {
   const { currentUserId, hasHydrated: authHydrated } = useAuthStore();
   const [code, setCode] = useState("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [purchasingPackageId, setPurchasingPackageId] = useState<string | null>(null);
 
   const account = accounts.find((item) => item.userId === currentUserId);
   const enabledPackages = useMemo(
@@ -44,6 +47,29 @@ export default function Credits() {
 
     setCode("");
     setMessage({ type: "success", text: `兑换成功，已获得 ${result.amount} 积分（${result.packageName}）。` });
+  };
+
+  const handlePurchase = async (packageId: string) => {
+    if (!currentUserId) {
+      setMessage({ type: "error", text: "请先登录或注册后再购买积分。" });
+      navigate("/auth");
+      return;
+    }
+
+    setPurchasingPackageId(packageId);
+    setMessage(null);
+    try {
+      const result = await createPaymentOrder({
+        packageId,
+        userId: currentUserId,
+        returnUrl: window.location.href,
+      });
+      window.open(result.payUrl, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : String(error) });
+    } finally {
+      setPurchasingPackageId(null);
+    }
   };
 
   return (
@@ -134,21 +160,14 @@ export default function Credits() {
                       ))}
                     </div>
                   ) : null}
-                  <a
-                    href={pkg.purchaseUrl || undefined}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(event) => {
-                      if (!pkg.purchaseUrl) event.preventDefault();
-                    }}
-                    className={
-                      pkg.purchaseUrl
-                        ? "absolute bottom-4 right-4 inline-flex h-9 items-center justify-center rounded-xl bg-cyan-400 px-4 text-sm font-medium text-black transition hover:bg-cyan-300"
-                        : "absolute bottom-4 right-4 inline-flex h-9 cursor-not-allowed items-center justify-center rounded-xl bg-white/[0.06] px-4 text-sm font-medium text-[#7f8798]"
-                    }
+                  <button
+                    type="button"
+                    onClick={() => void handlePurchase(pkg.id)}
+                    disabled={purchasingPackageId === pkg.id}
+                    className="absolute bottom-4 right-4 inline-flex h-9 items-center justify-center rounded-xl bg-cyan-400 px-4 text-sm font-medium text-black transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    订购套餐
-                  </a>
+                    {purchasingPackageId === pkg.id ? "创建订单..." : "订购套餐"}
+                  </button>
                 </article>
               ))
             ) : (

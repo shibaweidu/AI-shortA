@@ -1,5 +1,5 @@
 import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
-import { Database, FolderOpen, Image, Home, Cpu, Ticket, Users, LogOut, Package, Shield, Coins, Type, Sparkles, Mail, Palette, Terminal, HardDriveDownload, WandSparkles } from "lucide-react";
+import { CreditCard, Database, FolderOpen, Image, Home, Cpu, Ticket, Users, LogOut, Package, Shield, Coins, Type, Sparkles, Mail, Palette, Terminal, HardDriveDownload, WandSparkles } from "lucide-react";
 import { ADMIN_LOGIN_PATH, adminPath } from "../../lib/adminRoutes";
 import { cn } from "../../lib/utils";
 import { useAdminAuthStore } from "../../store/adminAuthStore";
@@ -15,6 +15,7 @@ export default function AdminLayout() {
     { path: adminPath("users"), label: "用户管理", icon: Users },
     { path: adminPath("home-content"), label: "首页文案", icon: Type },
     { path: adminPath("packages"), label: "积分套餐", icon: Package },
+    { path: adminPath("payment"), label: "支付接入", icon: CreditCard },
     { path: adminPath("redeem-codes"), label: "兑换码管理", icon: Ticket },
     { path: adminPath("model-credits"), label: "模型积分", icon: Coins },
     { path: adminPath("categories"), label: "栏目管理", icon: FolderOpen },

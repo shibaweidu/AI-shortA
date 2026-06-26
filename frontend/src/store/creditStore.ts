@@ -3,7 +3,7 @@ import { createJSONStorage, persist, type PersistOptions } from "zustand/middlew
 import { createBackendBackedStorage, createLocalStorageStateStorage } from "../lib/sharedStateStorage";
 
 export type RedeemCodeStatus = "unused" | "used" | "disabled" | "expired";
-export type CreditTransactionType = "redeem_code" | "generation_cost" | "generation_refund" | "admin_adjust";
+export type CreditTransactionType = "redeem_code" | "payment_purchase" | "generation_cost" | "generation_refund" | "admin_adjust";
 
 export interface CreditPackage {
   id: string;

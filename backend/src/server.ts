@@ -324,6 +324,21 @@ type GeneratedPublishSettings = {
   categories: CollectionCategoryConfig[];
 };
 
+type PaymentSettings = {
+  enabled: boolean;
+  providerName: string;
+  mode: "external" | "api";
+  createOrderUrl: string;
+  method: "POST" | "GET";
+  headersJson: string;
+  payloadTemplate: string;
+  payUrlField: string;
+  orderIdField: string;
+  webhookSecret: string;
+  successUrl: string;
+  cancelUrl: string;
+};
+
 type DataBackupManifest = {
   version: number;
   kind: "data-backup";
@@ -591,6 +606,32 @@ const DEFAULT_GENERATED_PUBLISH_SETTINGS: GeneratedPublishSettings = {
   categories: DEFAULT_COLLECTION_CATEGORIES,
 };
 let generatedPublishSettings: GeneratedPublishSettings = { ...DEFAULT_GENERATED_PUBLISH_SETTINGS };
+const PAYMENT_SETTINGS_KEY = "koala-payment-settings-v1";
+const CREDIT_STORE_KEY = "koala-credit-store-v1";
+const DEFAULT_PAYMENT_SETTINGS: PaymentSettings = {
+  enabled: false,
+  providerName: "",
+  mode: "external",
+  createOrderUrl: "",
+  method: "POST",
+  headersJson: "",
+  payloadTemplate: JSON.stringify({
+    orderId: "{{orderId}}",
+    packageId: "{{packageId}}",
+    packageName: "{{packageName}}",
+    amount: "{{price}}",
+    credits: "{{credits}}",
+    userId: "{{userId}}",
+    successUrl: "{{successUrl}}",
+    cancelUrl: "{{cancelUrl}}",
+  }, null, 2),
+  payUrlField: "payUrl",
+  orderIdField: "orderId",
+  webhookSecret: "",
+  successUrl: "",
+  cancelUrl: "",
+};
+let paymentSettings: PaymentSettings = { ...DEFAULT_PAYMENT_SETTINGS };
 
 app.use(cors({
   origin(origin, callback) {
@@ -664,6 +705,7 @@ function isAdminProtectedPath(method: string, path: string) {
   if (path.startsWith("/api/collection/sources")) return true;
   if (path.startsWith("/api/collection/runs")) return true;
   if (path === "/api/collection/run-enabled") return true;
+  if (path === "/api/payment-settings") return true;
   if (path === "/api/collection/works") return true;
   if (path.startsWith("/api/collection/works/batch")) return true;
   if (path.startsWith("/api/collection/works/") && method !== "GET" && !path.endsWith("/broken")) return true;
@@ -952,6 +994,72 @@ app.put("/api/collection/generated-publish-settings", (request, response) => {
   appState.set(GENERATED_PUBLISH_SETTINGS_KEY, JSON.stringify(generatedPublishSettings));
   void saveAppStateSoon();
   response.json(generatedPublishSettings);
+});
+
+app.get("/api/payment-settings", (_request, response) => {
+  response.json(getPaymentSettings());
+});
+
+app.put("/api/payment-settings", (request, response) => {
+  paymentSettings = normalizePaymentSettings(request.body);
+  appState.set(PAYMENT_SETTINGS_KEY, JSON.stringify(paymentSettings));
+  void saveAppStateSoon();
+  response.json(paymentSettings);
+});
+
+app.post("/api/payments/create-order", async (request, response) => {
+  const settings = getPaymentSettings();
+  const body = asPlainRecord(request.body);
+  const packageId = getStringField(body, "packageId");
+  const userId = getStringField(body, "userId");
+  const returnUrl = getStringField(body, "returnUrl");
+  const pkg = getCreditPackageById(packageId);
+
+  if (!pkg) {
+    response.status(404).json({ error: "Credit package not found" });
+    return;
+  }
+  if (!userId) {
+    response.status(400).json({ error: "userId is required" });
+    return;
+  }
+
+  try {
+    const result = await createPaymentOrder(settings, pkg, userId, returnUrl);
+    response.json(result);
+  } catch (error) {
+    response.status(500).json({ error: getErrorMessage(error) });
+  }
+});
+
+app.post("/api/payments/fulfill", (request, response) => {
+  const settings = getPaymentSettings();
+  const body = asPlainRecord(request.body);
+  const providedSecret = getStringField(body, "secret") || String(request.headers["x-payment-secret"] ?? "");
+  if (settings.webhookSecret && providedSecret !== settings.webhookSecret) {
+    response.status(401).json({ error: "Invalid payment webhook secret" });
+    return;
+  }
+
+  const packageId = getStringField(body, "packageId");
+  const userId = getStringField(body, "userId");
+  const orderId = getStringField(body, "orderId");
+  const pkg = getCreditPackageById(packageId);
+  if (!pkg) {
+    response.status(404).json({ error: "Credit package not found" });
+    return;
+  }
+  if (!userId || !orderId) {
+    response.status(400).json({ error: "userId and orderId are required" });
+    return;
+  }
+
+  try {
+    const result = fulfillPaymentOrder(pkg, userId, orderId);
+    response.json(result);
+  } catch (error) {
+    response.status(500).json({ error: getErrorMessage(error) });
+  }
 });
 
 app.post("/api/generated-works/publish", async (request, response) => {
@@ -5067,6 +5175,203 @@ function getGeneratedPublishSettings() {
   }
 }
 
+function normalizePaymentSettings(input: unknown): PaymentSettings {
+  const raw = asPlainRecord(input);
+  return {
+    enabled: raw.enabled === true,
+    providerName: getStringField(raw, "providerName"),
+    mode: raw.mode === "api" ? "api" : "external",
+    createOrderUrl: getStringField(raw, "createOrderUrl"),
+    method: raw.method === "GET" ? "GET" : "POST",
+    headersJson: getStringField(raw, "headersJson"),
+    payloadTemplate: getStringField(raw, "payloadTemplate") || DEFAULT_PAYMENT_SETTINGS.payloadTemplate,
+    payUrlField: getStringField(raw, "payUrlField") || "payUrl",
+    orderIdField: getStringField(raw, "orderIdField") || "orderId",
+    webhookSecret: getStringField(raw, "webhookSecret"),
+    successUrl: getStringField(raw, "successUrl"),
+    cancelUrl: getStringField(raw, "cancelUrl"),
+  };
+}
+
+function getPaymentSettings() {
+  const saved = appState.get(PAYMENT_SETTINGS_KEY);
+  if (!saved) return paymentSettings;
+  try {
+    return normalizePaymentSettings(JSON.parse(saved));
+  } catch {
+    return paymentSettings;
+  }
+}
+
+type PaymentCreditPackage = {
+  id: string;
+  name: string;
+  credits: number;
+  bonusCredits: number;
+  price: number;
+  purchaseUrl: string;
+  enabled: boolean;
+};
+
+function getCreditPackagesFromState(): PaymentCreditPackage[] {
+  const saved = appState.get(CREDIT_STORE_KEY);
+  if (!saved) return [];
+  try {
+    const envelope = JSON.parse(saved) as { state?: { packages?: unknown[] } };
+    return (Array.isArray(envelope?.state?.packages) ? envelope.state.packages : [])
+      .map((item) => {
+        const raw = asPlainRecord(item);
+        return {
+          id: getStringField(raw, "id"),
+          name: getStringField(raw, "name"),
+          credits: getNumberField(raw, "credits") ?? 0,
+          bonusCredits: getNumberField(raw, "bonusCredits") ?? 0,
+          price: getNumberField(raw, "price") ?? 0,
+          purchaseUrl: getStringField(raw, "purchaseUrl"),
+          enabled: raw.enabled !== false,
+        };
+      })
+      .filter((item) => item.id);
+  } catch {
+    return [];
+  }
+}
+
+function getCreditPackageById(packageId: string) {
+  return getCreditPackagesFromState().find((pkg) => pkg.id === packageId && pkg.enabled);
+}
+
+function fulfillPaymentOrder(pkg: PaymentCreditPackage, userId: string, orderId: string) {
+  const saved = appState.get(CREDIT_STORE_KEY);
+  const envelope = saved
+    ? JSON.parse(saved) as { state?: Record<string, unknown>; version?: unknown }
+    : { state: {}, version: 0 };
+  const state = asPlainRecord(envelope.state);
+  const accounts = Array.isArray(state.accounts) ? state.accounts.map(asPlainRecord) : [];
+  const transactions = Array.isArray(state.transactions) ? state.transactions.map(asPlainRecord) : [];
+  const existingTransaction = transactions.find((item) => getStringField(item, "generationTaskId") === orderId);
+  if (existingTransaction) {
+    return { ok: true, duplicated: true, orderId, amount: getNumberField(existingTransaction, "amount") ?? 0 };
+  }
+
+  const now = Date.now();
+  const amount = Math.max(0, Math.round((pkg.credits + pkg.bonusCredits) * 10000) / 10000);
+  if (amount <= 0) throw new Error("Credit package amount must be greater than 0");
+
+  const accountIndex = accounts.findIndex((item) => getStringField(item, "userId") === userId);
+  const currentAccount = accountIndex >= 0
+    ? accounts[accountIndex]
+    : { userId, balance: 0, totalEarned: 0, totalSpent: 0, updatedAt: now };
+  const balanceBefore = getNumberField(currentAccount, "balance") ?? 0;
+  const nextAccount = {
+    ...currentAccount,
+    userId,
+    balance: Math.round((balanceBefore + amount) * 10000) / 10000,
+    totalEarned: Math.round(((getNumberField(currentAccount, "totalEarned") ?? 0) + amount) * 10000) / 10000,
+    updatedAt: now,
+  };
+  const nextAccounts = accountIndex >= 0
+    ? accounts.map((item, index) => (index === accountIndex ? nextAccount : item))
+    : [...accounts, nextAccount];
+  const transaction = {
+    id: `txn-${randomUUID().slice(0, 8)}`,
+    userId,
+    type: "payment_purchase",
+    amount,
+    balanceBefore,
+    balanceAfter: nextAccount.balance,
+    packageId: pkg.id,
+    generationTaskId: orderId,
+    note: `支付购买：${pkg.name}`,
+    createdAt: now,
+  };
+  const nextEnvelope = {
+    ...envelope,
+    state: {
+      ...state,
+      accounts: nextAccounts,
+      transactions: [transaction, ...transactions],
+    },
+  };
+  const value = JSON.stringify(nextEnvelope);
+  appState.set(CREDIT_STORE_KEY, value);
+  logAppState("put", CREDIT_STORE_KEY, value);
+  saveAppStateEntryInBackground(CREDIT_STORE_KEY, value);
+  void saveAppStateSoon();
+  return { ok: true, duplicated: false, orderId, amount, balanceAfter: nextAccount.balance };
+}
+
+function renderPaymentTemplate(template: string, values: Record<string, string>) {
+  return template.replace(/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g, (_match, key: string) => values[key] ?? "");
+}
+
+function getNestedFieldValue(payload: unknown, path: string): unknown {
+  if (!path.trim()) return undefined;
+  return path.split(".").reduce<unknown>((current, key) => {
+    if (!current || typeof current !== "object") return undefined;
+    return (current as Record<string, unknown>)[key];
+  }, payload);
+}
+
+function parsePaymentHeaders(headersJson: string) {
+  if (!headersJson.trim()) return {};
+  const parsed = JSON.parse(headersJson) as unknown;
+  const headers = asPlainRecord(parsed);
+  return Object.fromEntries(Object.entries(headers).filter(([, value]) => typeof value === "string")) as Record<string, string>;
+}
+
+async function createPaymentOrder(settings: PaymentSettings, pkg: PaymentCreditPackage, userId: string, returnUrl: string) {
+  if (!settings.enabled || settings.mode === "external") {
+    if (!pkg.purchaseUrl) throw new Error("Payment is not configured for this package");
+    return { mode: "external", payUrl: pkg.purchaseUrl, orderId: "" };
+  }
+  if (!settings.createOrderUrl) throw new Error("Payment create order URL is not configured");
+
+  const orderId = `pay_${Date.now()}_${randomUUID().slice(0, 8)}`;
+  const successUrl = settings.successUrl || returnUrl;
+  const cancelUrl = settings.cancelUrl || returnUrl;
+  const values = {
+    orderId,
+    packageId: pkg.id,
+    packageName: pkg.name,
+    price: String(pkg.price),
+    amount: String(pkg.price),
+    credits: String(pkg.credits + pkg.bonusCredits),
+    userId,
+    successUrl,
+    cancelUrl,
+    returnUrl,
+  };
+  const renderedPayload = renderPaymentTemplate(settings.payloadTemplate, values);
+  const payload = renderedPayload.trim() ? JSON.parse(renderedPayload) as Record<string, unknown> : {};
+  const headers = { "Content-Type": "application/json", ...parsePaymentHeaders(settings.headersJson) };
+  const targetUrl = new URL(settings.createOrderUrl);
+  const init: RequestInit = { method: settings.method, headers };
+  if (settings.method === "GET") {
+    for (const [key, value] of Object.entries(payload)) {
+      if (value !== undefined && value !== null) targetUrl.searchParams.set(key, String(value));
+    }
+  } else {
+    init.body = JSON.stringify(payload);
+  }
+
+  const upstreamResponse = await fetch(targetUrl, init);
+  const responseText = await upstreamResponse.text();
+  const responsePayload = parseJsonOrText(responseText);
+  if (!upstreamResponse.ok) {
+    throw new Error(getMessageFromPayload(responsePayload) || `Payment provider returned ${upstreamResponse.status}`);
+  }
+
+  const payUrl = getNestedFieldValue(responsePayload, settings.payUrlField);
+  const upstreamOrderId = getNestedFieldValue(responsePayload, settings.orderIdField);
+  if (typeof payUrl !== "string" || !payUrl) throw new Error("Payment provider response did not include a pay URL");
+  return {
+    mode: "api",
+    payUrl,
+    orderId: typeof upstreamOrderId === "string" && upstreamOrderId ? upstreamOrderId : orderId,
+  };
+}
+
 function normalizeCollectionCategoryId(value: unknown) {
   const id = typeof value === "string" ? value.trim().toLowerCase() : "";
   return ["portrait", "character", "scene", "product", "poster", "illustration", "style", "anime", "cg", "chinese"].includes(id) ? id : "";
@@ -5407,6 +5712,7 @@ async function ensureDataFiles() {
   markStaleCollectionRunsFailed();
   collectionClassifierSettings = getCollectionClassifierSettings();
   generatedPublishSettings = getGeneratedPublishSettings();
+  paymentSettings = getPaymentSettings();
   // 优先使用后台保存的 token；未保存时保留环境变量 CIVITAI_API_TOKEN 的默认值。
   const savedCivitaiToken = appState.get(CIVITAI_API_TOKEN_KEY);
   if (savedCivitaiToken !== undefined) civitaiApiToken = savedCivitaiToken.trim();
