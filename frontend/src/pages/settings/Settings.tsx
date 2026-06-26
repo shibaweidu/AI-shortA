@@ -955,10 +955,6 @@ export default function Settings({
                                   <label className="text-sm font-medium text-white">标签</label>
                                   <Input value={draft.tags} onChange={(event) => setDraft(provider.id, type, { tags: event.target.value })} placeholder="例如：超清4K 多参考图" className={INPUT_CLASS_NAME} />
                                 </div>
-                                <div className="space-y-2 md:col-span-2">
-                                  <label className="text-sm font-medium text-white">消耗积分</label>
-                                  <Input value={draft.credits} onChange={(event) => setDraft(provider.id, type, { credits: event.target.value })} placeholder="例如：10" className={INPUT_CLASS_NAME} />
-                                </div>
                                 <ApiRouteSelector
                                   type={type}
                                   routes={draft.apiRoutes}
@@ -980,7 +976,6 @@ export default function Settings({
                                       providerDisplayName: draft.providerDisplayName.trim() || undefined,
                                       description: draft.description.trim() || undefined,
                                       tags: parseModelTags(draft.tags),
-                                      credits: draft.credits.trim() ? Number(draft.credits) : undefined,
                                       apiRoutes: buildDraftApiRoutes(provider, type, modelId, draft.name.trim() || modelId, draft.apiRoutes),
                                     };
 
@@ -1108,7 +1103,6 @@ export default function Settings({
                                     {tag}
                                   </span>
                                 ))}
-                                {model.credits !== undefined && model.credits > 0 ? <span className="rounded-full bg-cyan-400/10 px-2 py-0.5 text-[10px] text-cyan-300">{model.credits} 积分</span> : null}
                               </div>
                             </div>
                           </div>
@@ -1227,10 +1221,6 @@ export default function Settings({
                           <label className="text-sm font-medium text-white">标签</label>
                           <Input value={selectionDraft.tags} onChange={(event) => setSelectionDraft((current) => (current ? { ...current, tags: event.target.value } : current))} placeholder="例如：超清4K 多参考图" className={INPUT_CLASS_NAME} />
                         </div>
-                        <div className="space-y-2">
-                          <label className="text-sm font-medium text-white">消耗积分</label>
-                          <Input value={selectionDraft.credits} onChange={(event) => setSelectionDraft((current) => (current ? { ...current, credits: event.target.value } : current))} placeholder="例如：10" className={INPUT_CLASS_NAME} />
-                        </div>
                         <ApiRouteSelector
                           type={type}
                           routes={selectionDraft.apiRoutes}
@@ -1254,7 +1244,6 @@ export default function Settings({
                               providerDisplayName: selectionDraft.providerDisplayName.trim() || undefined,
                               description: selectionDraft.description.trim() || undefined,
                               tags: parseModelTags(selectionDraft.tags),
-                              credits: selectionDraft.credits.trim() ? Number(selectionDraft.credits) : undefined,
                               apiRoutes: buildDraftApiRoutes(
                                 customProviders.find((provider) => provider.id === providerId),
                                 type,

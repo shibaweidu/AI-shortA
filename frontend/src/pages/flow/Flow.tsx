@@ -248,7 +248,6 @@ export default function Flow() {
         type,
         resolution: type === "image" ? resolution : undefined,
         duration: type === "video" ? duration : undefined,
-        fallbackCredits: selectedModelOption?.credits,
       })
     : undefined;
   const estimatedCredits = estimatedCreditsPerItem !== undefined ? estimatedCreditsPerItem * generationCount : undefined;
@@ -601,7 +600,6 @@ export default function Flow() {
       type: itemType,
       resolution,
       duration: itemType === "video" ? duration : undefined,
-      fallbackCredits: selectedModelOption?.credits,
     });
 
     isStartingGenerationRef.current = true;

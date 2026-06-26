@@ -738,11 +738,6 @@ export function AgentChat() {
                                     {option.source === 'custom' ? '自定义' : '考拉AI'}
                                   </span>
                                 ) : null}
-                                {option.credits !== undefined && option.credits > 0 ? (
-                                  <span className="shrink-0 rounded-full bg-cyan-400/10 px-2 py-0.5 text-[10px] text-cyan-300">
-                                    {option.credits} 积分
-                                  </span>
-                                ) : null}
                               </div>
                               <div className="mt-1 truncate text-xs text-[#99A0AE]">{option.providerName}</div>
                               {option.description ? <div className="mt-1 line-clamp-2 text-xs leading-4 text-[#b2bac8]">{option.description}</div> : null}

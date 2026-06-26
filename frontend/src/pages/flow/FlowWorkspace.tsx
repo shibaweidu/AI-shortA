@@ -116,7 +116,6 @@ export default function FlowWorkspace() {
         modelValue: model,
         type: "image",
         resolution,
-        fallbackCredits: selectedModelOption?.credits,
       })
     : undefined;
   const estimatedCredits = estimatedCreditsPerItem !== undefined ? estimatedCreditsPerItem * generationCount : undefined;
@@ -313,7 +312,6 @@ export default function FlowWorkspace() {
       modelValue: model,
       type: "image",
       resolution,
-      fallbackCredits: selectedModelOption?.credits,
     });
     const sourceReferenceImages = await resolveReferenceImageDataUrls(referenceImages);
     const sourceReference = sourceReferenceImages[0];

@@ -4,7 +4,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { buildModelCatalogOptions, type ModelCatalogOption } from "../../lib/modelCatalog";
 import { IMAGE_RESOLUTION_OPTIONS, type GeneratorOption } from "../../lib/generatorOptions";
-import { useModelCreditStore, type ModelCreditRule } from "../../store/modelCreditStore";
+import { findModelCreditRule, useModelCreditStore, type ModelCreditRule } from "../../store/modelCreditStore";
 import { useSettingsStore } from "../../store/settingsStore";
 
 const inputClass = "h-8 rounded-lg border-white/[0.08] bg-white/[0.035] px-2 text-sm text-white placeholder:text-[#667085]";
@@ -65,7 +65,7 @@ function CreditSection({ title, iconClassName, models, options, rules, emptyText
               </div>
 
               {models.map((model) => {
-                const rule = rules.find((item) => item.modelValue === model.value);
+                const rule = findModelCreditRule(rules, model.value);
                 return (
                   <div
                     key={model.value}
@@ -85,7 +85,7 @@ function CreditSection({ title, iconClassName, models, options, rules, emptyText
                           min={0}
                           value={getValue(rule, option.value) ?? ""}
                           onChange={(event) => onChange(model.value, option.value, Number(event.target.value))}
-                          placeholder={`${model.credits ?? 0}`}
+                          placeholder="0"
                           className={inputClass}
                         />
                       </label>
@@ -126,7 +126,7 @@ export default function AdminModelCredits() {
         <div>
           <h1 className="text-xl font-semibold text-white">模型积分设置</h1>
           <p className="mt-1.5 max-w-3xl text-sm leading-6 text-[#8f97aa]">
-            为同一个模型配置不同图片分辨率下的消耗积分；视频模型按每秒积分计算。未配置的项目会回退使用模型管理里的默认“消耗积分”。
+            为同一个模型配置不同图片分辨率下的消耗积分；视频模型按每秒积分计算。未配置或设置为 0 时不消耗积分。
           </p>
         </div>
         <div className="flex h-9 items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3">
@@ -143,7 +143,7 @@ export default function AdminModelCredits() {
           options={IMAGE_RESOLUTION_OPTIONS}
           rules={rules}
           emptyText="暂无图片模型，请先到模型管理添加并启用模型。"
-          defaultText={(model) => `默认 ${model.credits ?? 0} 积分`}
+          defaultText={() => "未配置：0 积分"}
           getValue={(rule, optionValue) => rule?.imageCreditsByResolution[optionValue]}
           onChange={setImageCredits}
           onClear={clearRule}
@@ -156,7 +156,7 @@ export default function AdminModelCredits() {
           options={VIDEO_CREDITS_PER_SECOND_OPTIONS}
           rules={rules}
           emptyText="暂无视频模型，请先到模型管理添加并启用模型。"
-          defaultText={(model) => `默认每秒 ${model.credits ?? 0} 积分`}
+          defaultText={() => "未配置：0 积分/秒"}
           getValue={(rule) => rule?.videoCreditsPerSecond}
           onChange={(modelValue, _optionValue, credits) => setVideoCreditsPerSecond(modelValue, credits)}
           onClear={clearRule}

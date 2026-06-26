@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist, type PersistOptions } from "zustand/middleware";
+import { parseProviderModelValue, parseSourcedProviderModelValue } from "../lib/providerModels";
 import { createBackendBackedStorage, createLocalStorageStateStorage } from "../lib/sharedStateStorage";
 
 export interface ModelCreditRule {
@@ -31,6 +32,22 @@ function parseDurationSeconds(value?: string) {
   const seconds = Number.parseFloat(value ?? "");
   if (!Number.isFinite(seconds) || seconds <= 0) return 1;
   return seconds;
+}
+
+function getModelCreditLookupValues(modelValue: string) {
+  const sourced = parseSourcedProviderModelValue(modelValue);
+  if (sourced) return [modelValue, `${sourced.providerId}::${sourced.modelId}`, sourced.modelId];
+  const parsed = parseProviderModelValue(modelValue);
+  if (parsed) return [modelValue, parsed.modelId];
+  return [modelValue];
+}
+
+export function findModelCreditRule(rules: ModelCreditRule[], modelValue: string) {
+  const lookupValues = new Set(getModelCreditLookupValues(modelValue));
+  return rules.find((item) => {
+    if (lookupValues.has(item.modelValue)) return true;
+    return getModelCreditLookupValues(item.modelValue).some((value) => lookupValues.has(value));
+  });
 }
 
 function upsertRule(rules: ModelCreditRule[], modelValue: string, updater: (rule: ModelCreditRule) => ModelCreditRule) {
@@ -104,16 +121,16 @@ export function getModelCreditCost(input: {
   type: "image" | "video";
   resolution?: string;
   duration?: string;
-  fallbackCredits?: number;
 }) {
-  const rule = input.rules.find((item) => item.modelValue === input.modelValue);
+  const rule = findModelCreditRule(input.rules, input.modelValue);
   if (input.type === "image" && input.resolution) {
     const credits = rule?.imageCreditsByResolution[input.resolution];
     if (typeof credits === "number") return credits;
+    return 0;
   }
   if (input.type === "video") {
-    const creditsPerSecond = typeof rule?.videoCreditsPerSecond === "number" ? rule.videoCreditsPerSecond : input.fallbackCredits;
-    return normalizeCredits((creditsPerSecond ?? 0) * parseDurationSeconds(input.duration));
+    const creditsPerSecond = typeof rule?.videoCreditsPerSecond === "number" ? rule.videoCreditsPerSecond : 0;
+    return normalizeCredits(creditsPerSecond * parseDurationSeconds(input.duration));
   }
-  return typeof input.fallbackCredits === "number" ? input.fallbackCredits : 0;
+  return 0;
 }

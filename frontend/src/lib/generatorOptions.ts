@@ -10,7 +10,6 @@ export type GeneratorOption = {
   imageUrl?: string;
   labels?: string[];
   providerName?: string;
-  credits?: number;
   providerDisplayName?: string;
   source?: "koala" | "custom";
 };
@@ -111,7 +110,6 @@ export function buildGeneratorModelOptions(options: ModelCatalogOption[]): Gener
     imageUrl: option.imageUrl,
     labels: option.labels,
     providerName: option.providerName,
-    credits: option.credits,
     providerDisplayName: option.providerName,
     source: option.source,
   }));

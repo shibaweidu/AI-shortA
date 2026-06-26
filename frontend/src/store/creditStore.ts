@@ -381,6 +381,7 @@ export const useCreditStore = create<CreditState>()(
       spendCredits: (input) => {
         const now = Date.now();
         const amount = normalizeAmount(input.amount);
+        if (amount <= 0) return { ok: true };
 
         let result: { ok: true } | { ok: false; message: string } = { ok: true };
         set((state) => {

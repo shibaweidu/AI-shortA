@@ -6,7 +6,6 @@ export type ModelCatalogOption = {
   label: string;
   hint?: string;
   providerName?: string;
-  credits?: number;
   description?: string;
   thumbText?: string;
   thumbClassName?: string;
@@ -81,7 +80,6 @@ export function buildModelCatalogOptions(
           label: model.name,
           hint: model.description || (routedIds.has(value) ? `${model.providerDisplayName || provider.name} · 已加入默认路由` : model.providerDisplayName || provider.name),
           providerName: model.providerDisplayName || provider.name,
-          credits: model.credits,
           thumbText: buildThumbText(model.name, model.id),
           thumbClassName: palette,
           source,

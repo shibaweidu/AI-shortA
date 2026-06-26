@@ -1744,11 +1744,6 @@ export function FlowGeneratorBar({
                               <div className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-[500]", option.source === "custom" ? "bg-violet-400/10 text-violet-200" : "bg-cyan-400/10 text-cyan-200")}>
                                 {option.source === "custom" ? "自定义" : "考拉AI"}
                               </div>
-                              {option.credits !== undefined && option.credits > 0 ? (
-                                <div className="shrink-0 rounded-full bg-cyan-400/10 px-2 py-0.5 text-[11px] font-[500] text-cyan-300">
-                                  默认 {option.credits} {type === "video" ? "积分/秒" : "积分"}
-                                </div>
-                              ) : null}
                             </div>
                             <div className="flex w-full min-w-0 flex-wrap items-center gap-[6px]">
                               <div className="truncate text-[12px] text-[#99A0AE]">{option.providerName}</div>
@@ -2297,10 +2292,10 @@ export function FlowGeneratorBar({
           <span>提示词 Agent</span>
         </button>
 
-        <div className="ml-auto flex shrink-0 items-center gap-3">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           {estimatedCredits !== undefined && estimatedCredits > 0 ? (
-            <div className="hidden rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1.5 text-xs text-cyan-100 md:block">
-              预计消耗 {estimatedCredits} 积分
+            <div className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-[11px] font-medium text-cyan-100 md:px-3 md:py-1.5 md:text-xs">
+              {estimatedCredits} 积分
             </div>
           ) : null}
           <button
