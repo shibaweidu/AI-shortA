@@ -4,8 +4,8 @@ import { Button } from "../../components/ui/button";
 import {
   createDataBackup,
   deleteDataBackup,
+  downloadDataBackup,
   fetchDataStatus,
-  getDataBackupDownloadUrl,
   migrateDataToPostgres,
   type DataBackupItem,
   type DataStatusResponse,
@@ -99,6 +99,15 @@ export default function AdminData() {
       setMessage({ type: "error", text: error instanceof Error ? error.message : String(error) });
     } finally {
       setBusy(null);
+    }
+  };
+
+  const handleDownload = async (fileName: string) => {
+    setMessage(null);
+    try {
+      await downloadDataBackup(fileName);
+    } catch (error) {
+      setMessage({ type: "error", text: error instanceof Error ? error.message : String(error) });
     }
   };
 
@@ -202,10 +211,10 @@ export default function AdminData() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <a href={getDataBackupDownloadUrl(item.fileName)} className="inline-flex h-9 items-center gap-2 rounded-xl bg-cyan-400 px-4 text-sm font-medium text-black hover:bg-cyan-300">
+                  <button type="button" onClick={() => void handleDownload(item.fileName)} className="inline-flex h-9 items-center gap-2 rounded-xl bg-cyan-400 px-4 text-sm font-medium text-black hover:bg-cyan-300">
                     <Download className="h-4 w-4" />
                     下载
-                  </a>
+                  </button>
                   <button type="button" onClick={() => void handleDelete(item.fileName)} disabled={busy === "delete"} className="inline-flex h-9 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.03] px-3 text-sm text-[#cfd6e2] hover:bg-red-500/10 hover:text-red-100">
                     <Trash2 className="h-4 w-4" />
                   </button>

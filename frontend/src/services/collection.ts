@@ -1,3 +1,5 @@
+import { withAdminHeaders } from "./adminApi";
+
 const API_BASE = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "";
 
 export type CollectionProvider = "civitai" | "lexica" | "generated";
@@ -144,6 +146,10 @@ async function readJson<T>(response: Response): Promise<T> {
   return data as T;
 }
 
+function adminFetch(path: string, init: RequestInit = {}) {
+  return fetch(`${API_BASE}${path}`, withAdminHeaders(init, Boolean(init.body)));
+}
+
 export async function fetchHomeFeed(input: { cursor?: string; limit?: number; categoryId?: string } = {}) {
   const params = new URLSearchParams();
   params.set("limit", String(input.limit ?? 30));
@@ -174,13 +180,13 @@ export async function reportCollectionImageBroken(id: string) {
 }
 
 export async function fetchCollectionSources() {
-  const response = await fetch(`${API_BASE}/api/collection/sources`, { cache: "no-store" });
+  const response = await adminFetch("/api/collection/sources", { cache: "no-store" });
   return readJson<{ sources: CollectionSource[] }>(response);
 }
 
 export async function fetchCollectionClassifierSettings() {
   try {
-    const response = await fetch(`${API_BASE}/api/collection/classifier-settings`, { cache: "no-store" });
+    const response = await adminFetch("/api/collection/classifier-settings", { cache: "no-store" });
     return readJson<CollectionClassifierSettings>(response);
   } catch {
     return DEFAULT_COLLECTION_CLASSIFIER_SETTINGS;
@@ -188,9 +194,8 @@ export async function fetchCollectionClassifierSettings() {
 }
 
 export async function updateCollectionClassifierSettings(settings: CollectionClassifierSettings) {
-  const response = await fetch(`${API_BASE}/api/collection/classifier-settings`, {
+  const response = await adminFetch("/api/collection/classifier-settings", {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(settings),
   });
   return readJson<CollectionClassifierSettings>(response);
@@ -198,7 +203,7 @@ export async function updateCollectionClassifierSettings(settings: CollectionCla
 
 export async function fetchGeneratedPublishSettings() {
   try {
-    const response = await fetch(`${API_BASE}/api/collection/generated-publish-settings`, { cache: "no-store" });
+    const response = await adminFetch("/api/collection/generated-publish-settings", { cache: "no-store" });
     return readJson<GeneratedPublishSettings>(response);
   } catch {
     return DEFAULT_GENERATED_PUBLISH_SETTINGS;
@@ -206,9 +211,8 @@ export async function fetchGeneratedPublishSettings() {
 }
 
 export async function updateGeneratedPublishSettings(settings: GeneratedPublishSettings) {
-  const response = await fetch(`${API_BASE}/api/collection/generated-publish-settings`, {
+  const response = await adminFetch("/api/collection/generated-publish-settings", {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(settings),
   });
   return readJson<GeneratedPublishSettings>(response);
@@ -233,16 +237,15 @@ export async function publishGeneratedWork(input: {
   resolution?: string;
   metadata?: Record<string, unknown>;
 }) {
-  const response = await fetch(`${API_BASE}/api/generated-works/publish`, {
+  const response = await adminFetch("/api/generated-works/publish", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
   return readJson<{ ok: true; work: CollectionWork | null }>(response);
 }
 
 export async function deleteCollectionSource(id: string) {
-  const response = await fetch(`${API_BASE}/api/collection/sources/${encodeURIComponent(id)}`, { method: "DELETE" });
+  const response = await adminFetch(`/api/collection/sources/${encodeURIComponent(id)}`, { method: "DELETE" });
   return readJson<{ ok: true; deleted: boolean }>(response);
 }
 
@@ -250,12 +253,12 @@ export async function fetchCollectionRuns(input: { sourceId?: string; limit?: nu
   const params = new URLSearchParams();
   params.set("limit", String(input.limit ?? 30));
   if (input.sourceId) params.set("sourceId", input.sourceId);
-  const response = await fetch(`${API_BASE}/api/collection/runs?${params.toString()}`, { cache: "no-store" });
+  const response = await adminFetch(`/api/collection/runs?${params.toString()}`, { cache: "no-store" });
   return readJson<{ runs: CollectionRun[] }>(response);
 }
 
 export async function deleteCollectionRun(id: string) {
-  const response = await fetch(`${API_BASE}/api/collection/runs/${encodeURIComponent(id)}`, { method: "DELETE" });
+  const response = await adminFetch(`/api/collection/runs/${encodeURIComponent(id)}`, { method: "DELETE" });
   return readJson<{ ok: true; deleted: boolean }>(response);
 }
 
@@ -263,7 +266,7 @@ export async function clearCollectionRuns(input: { sourceId?: string } = {}) {
   const params = new URLSearchParams();
   if (input.sourceId) params.set("sourceId", input.sourceId);
   const suffix = params.toString() ? `?${params.toString()}` : "";
-  const response = await fetch(`${API_BASE}/api/collection/runs${suffix}`, { method: "DELETE" });
+  const response = await adminFetch(`/api/collection/runs${suffix}`, { method: "DELETE" });
   return readJson<{ ok: true; deleted: number }>(response);
 }
 
@@ -271,7 +274,7 @@ export type CivitaiTokenStatus = { configured: boolean; hint: string };
 
 export async function fetchCivitaiTokenStatus() {
   try {
-    const response = await fetch(`${API_BASE}/api/collection/civitai-token`, { cache: "no-store" });
+    const response = await adminFetch("/api/collection/civitai-token", { cache: "no-store" });
     return readJson<CivitaiTokenStatus>(response);
   } catch {
     return { configured: false, hint: "" } satisfies CivitaiTokenStatus;
@@ -279,9 +282,8 @@ export async function fetchCivitaiTokenStatus() {
 }
 
 export async function updateCivitaiToken(token: string) {
-  const response = await fetch(`${API_BASE}/api/collection/civitai-token`, {
+  const response = await adminFetch("/api/collection/civitai-token", {
     method: "PUT",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token }),
   });
   return readJson<CivitaiTokenStatus>(response);
@@ -301,32 +303,30 @@ export async function createCollectionSource(input: {
   maxItemsPerRun?: number;
   scheduleEveryHours?: number;
 }) {
-  const response = await fetch(`${API_BASE}/api/collection/sources`, {
+  const response = await adminFetch("/api/collection/sources", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
   return readJson<{ source: CollectionSource }>(response);
 }
 
 export async function runCollectionSource(id: string) {
-  const response = await fetch(`${API_BASE}/api/collection/sources/${encodeURIComponent(id)}/run`, {
+  const response = await adminFetch(`/api/collection/sources/${encodeURIComponent(id)}/run`, {
     method: "POST",
   });
   return readJson<{ ok: true; fetched: number; added: number; skipped: number; source: CollectionSource }>(response);
 }
 
 export async function updateCollectionSource(id: string, input: Partial<Pick<CollectionSource, "enabled" | "autoPublish" | "filterNsfw" | "maxItemsPerRun" | "scheduleEveryHours" | "sort" | "period">>) {
-  const response = await fetch(`${API_BASE}/api/collection/sources/${encodeURIComponent(id)}`, {
+  const response = await adminFetch(`/api/collection/sources/${encodeURIComponent(id)}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
   return readJson<{ source: CollectionSource }>(response);
 }
 
 export async function runEnabledCollectionSources() {
-  const response = await fetch(`${API_BASE}/api/collection/run-enabled`, { method: "POST" });
+  const response = await adminFetch("/api/collection/run-enabled", { method: "POST" });
   return readJson<{ ok: true; results: Array<{ sourceId: string; ok: boolean; fetched?: number; added?: number; skipped?: number; error?: string }> }>(response);
 }
 
@@ -335,39 +335,37 @@ export async function fetchCollectionWorks(input: { status?: CollectionWorkStatu
   params.set("limit", String(input.limit ?? 30));
   if (input.status) params.set("status", input.status);
   if (input.cursor) params.set("cursor", input.cursor);
-  const response = await fetch(`${API_BASE}/api/collection/works?${params.toString()}`, { cache: "no-store" });
+  const response = await adminFetch(`/api/collection/works?${params.toString()}`, { cache: "no-store" });
   return readJson<CollectionPage>(response);
 }
 
 export async function publishCollectionWork(id: string) {
-  const response = await fetch(`${API_BASE}/api/collection/works/${encodeURIComponent(id)}/publish`, { method: "POST" });
+  const response = await adminFetch(`/api/collection/works/${encodeURIComponent(id)}/publish`, { method: "POST" });
   return readJson<{ work: CollectionWork }>(response);
 }
 
 export async function updateCollectionWork(id: string, input: Partial<Pick<CollectionWork, "title" | "prompt" | "negativePrompt" | "model" | "categoryId" | "categoryName" | "tags" | "displayUrl" | "thumbnailUrl" | "sourcePageUrl" | "featured">>) {
-  const response = await fetch(`${API_BASE}/api/collection/works/${encodeURIComponent(id)}`, {
+  const response = await adminFetch(`/api/collection/works/${encodeURIComponent(id)}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
   return readJson<{ work: CollectionWork }>(response);
 }
 
 export async function batchCollectionWorks(input: { ids: string[]; action: "publish" | "reject" | "delete" }) {
-  const response = await fetch(`${API_BASE}/api/collection/works/batch`, {
+  const response = await adminFetch("/api/collection/works/batch", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
   return readJson<{ ok: true; affected: number }>(response);
 }
 
 export async function rejectCollectionWork(id: string) {
-  const response = await fetch(`${API_BASE}/api/collection/works/${encodeURIComponent(id)}/reject`, { method: "POST" });
+  const response = await adminFetch(`/api/collection/works/${encodeURIComponent(id)}/reject`, { method: "POST" });
   return readJson<{ work: CollectionWork }>(response);
 }
 
 export async function deleteCollectionWork(id: string) {
-  const response = await fetch(`${API_BASE}/api/collection/works/${encodeURIComponent(id)}`, { method: "DELETE" });
+  const response = await adminFetch(`/api/collection/works/${encodeURIComponent(id)}`, { method: "DELETE" });
   return readJson<{ ok: true; deleted: boolean }>(response);
 }

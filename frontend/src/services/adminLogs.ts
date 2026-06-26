@@ -1,3 +1,5 @@
+import { withAdminHeaders } from "./adminApi";
+
 const BACKEND_API = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "";
 
 export interface AdminLogSource {
@@ -23,7 +25,7 @@ export async function fetchAdminLogs(input: { source?: string; lines?: number; q
   if (input.query?.trim()) params.set("q", input.query.trim());
 
   const suffix = params.toString() ? `?${params.toString()}` : "";
-  const response = await fetch(`${BACKEND_API}/api/admin/logs${suffix}`, { cache: "no-store" });
+  const response = await fetch(`${BACKEND_API}/api/admin/logs${suffix}`, withAdminHeaders({ cache: "no-store" }));
   const data = await response.json().catch(() => ({})) as { error?: string };
   if (!response.ok) throw new Error(data.error || `请求失败：${response.status}`);
   return data as AdminLogResponse;

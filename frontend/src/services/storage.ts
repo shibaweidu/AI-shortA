@@ -1,3 +1,5 @@
+import { withAdminHeaders } from "./adminApi";
+
 const BACKEND_API = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "";
 
 export interface ObjectStorageConfig {
@@ -37,8 +39,7 @@ export interface ObjectStorageItem {
 
 async function requestJson<T>(path: string, init?: RequestInit) {
   const response = await fetch(`${BACKEND_API}${path}`, {
-    ...init,
-    headers: init?.body ? { "Content-Type": "application/json", ...(init.headers ?? {}) } : init?.headers,
+    ...withAdminHeaders(init, Boolean(init?.body)),
   });
   const data = await response.json().catch(() => ({})) as { error?: string };
   if (!response.ok) throw new Error(data.error || `请求失败：${response.status}`);

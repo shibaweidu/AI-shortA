@@ -11,6 +11,22 @@ function env(name: string) {
   return (process.env[name] ?? "").trim();
 }
 
+function isPlaceholder(value: string) {
+  return !value || value === "change-me" || value === "change-this-long-random-token";
+}
+
+function parseMegabyteLimit(value: string) {
+  const match = value.trim().toLowerCase().match(/^(\d+(?:\.\d+)?)\s*(kb|mb|gb)?$/);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  const unit = match[2] ?? "b";
+  if (!Number.isFinite(amount)) return null;
+  if (unit === "gb") return amount * 1024;
+  if (unit === "mb") return amount;
+  if (unit === "kb") return amount / 1024;
+  return amount / 1024 / 1024;
+}
+
 async function main() {
   const checks: Check[] = [];
   checks.push({
@@ -19,13 +35,24 @@ async function main() {
     message: env("PUBLIC_BASE_URL") || "missing",
   });
   checks.push({
+    name: "CORS_ALLOWED_ORIGINS",
+    ok: env("CORS_ALLOWED_ORIGINS").split(",").map((item) => item.trim()).filter(Boolean).length > 0
+      && env("CORS_ALLOWED_ORIGINS").split(",").map((item) => item.trim()).filter(Boolean).every((origin) => /^https?:\/\/[^/]+/i.test(origin)),
+    message: env("CORS_ALLOWED_ORIGINS") || "missing",
+  });
+  checks.push({
+    name: "ADMIN_API_TOKEN",
+    ok: env("ADMIN_API_TOKEN").length >= 24 && !isPlaceholder(env("ADMIN_API_TOKEN")),
+    message: env("ADMIN_API_TOKEN") ? "configured" : "missing",
+  });
+  checks.push({
     name: "DATABASE_URL",
     ok: isPostgresEnabled(),
     message: isPostgresEnabled() ? "configured" : "missing",
   });
   checks.push({
     name: "POSTGRES_PASSWORD",
-    ok: Boolean(env("POSTGRES_PASSWORD")) && env("POSTGRES_PASSWORD") !== "change-me",
+    ok: !isPlaceholder(env("POSTGRES_PASSWORD")),
     message: env("POSTGRES_PASSWORD") ? "configured" : "missing",
   });
   checks.push({
@@ -35,9 +62,24 @@ async function main() {
   });
   checks.push({
     name: "OBJECT_STORAGE",
-    ok: true,
+    ok: env("OBJECT_STORAGE_ENABLED") === "1",
     message: env("OBJECT_STORAGE_ENABLED") === "1" ? "enabled" : "local uploads fallback",
-    severity: env("OBJECT_STORAGE_ENABLED") === "1" ? undefined : "warning",
+  });
+  if (env("OBJECT_STORAGE_ENABLED") === "1") {
+    for (const name of ["OBJECT_STORAGE_ENDPOINT", "OBJECT_STORAGE_BUCKET", "OBJECT_STORAGE_ACCESS_KEY_ID", "OBJECT_STORAGE_SECRET_ACCESS_KEY", "OBJECT_STORAGE_PUBLIC_BASE_URL"]) {
+      checks.push({
+        name,
+        ok: Boolean(env(name)),
+        message: env(name) ? "configured" : "missing",
+      });
+    }
+  }
+  const jsonLimitMb = parseMegabyteLimit(env("JSON_BODY_LIMIT") || "50mb");
+  checks.push({
+    name: "JSON_BODY_LIMIT",
+    ok: jsonLimitMb !== null && jsonLimitMb <= 100,
+    message: env("JSON_BODY_LIMIT") || "50mb",
+    severity: jsonLimitMb !== null && jsonLimitMb <= 100 ? undefined : "warning",
   });
   if (isPostgresEnabled()) {
     try {

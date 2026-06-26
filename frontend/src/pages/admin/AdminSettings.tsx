@@ -7,6 +7,7 @@ import { useSiteContentStore } from "../../store/siteContentStore";
 import { useSettingsStore } from "../../store/settingsStore";
 import { useUserModelStore } from "../../store/userModelStore";
 import { buildModelCatalogOptions } from "../../lib/modelCatalog";
+import { getAdminApiToken, setAdminApiToken } from "../../services/adminApi";
 import { DEFAULT_REFERENCE_SETTINGS, fetchReferenceSettings, updateReferenceSettings, type ReferenceSettings } from "../../services/referenceSettings";
 
 const referenceRoleLabels: Record<keyof ReferenceSettings["rolePrompts"], string> = {
@@ -25,6 +26,8 @@ export default function AdminSettings() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [adminApiToken, setAdminApiTokenValue] = useState(() => getAdminApiToken());
+  const [adminApiTokenMessage, setAdminApiTokenMessage] = useState("");
   const [title, setTitle] = useState(homeTitle);
   const [highlight, setHighlight] = useState(homeHighlight);
   const [subtitle, setSubtitle] = useState(homeSubtitle);
@@ -56,6 +59,11 @@ export default function AdminSettings() {
     setCurrentPassword("");
     setPassword("");
     setMessage({ type: "success", text: "管理员账号已更新。" });
+  };
+
+  const saveAdminApiToken = () => {
+    setAdminApiToken(adminApiToken);
+    setAdminApiTokenMessage(adminApiToken.trim() ? "Admin API Token saved." : "Admin API Token cleared.");
   };
 
   const saveHomeContent = () => {
@@ -201,6 +209,26 @@ export default function AdminSettings() {
           ) : null}
           <Button type="button" onClick={() => void save()} className="h-11 rounded-xl bg-cyan-400 px-5 text-black hover:bg-cyan-300">
             保存管理员账号
+          </Button>
+        </div>
+      </div>
+
+      <div className="mt-6 max-w-xl rounded-[28px] border border-white/[0.08] bg-[#11141b] p-6">
+        <div className="mb-6 flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-400/10 text-cyan-300">
+            <Shield className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="text-lg font-semibold text-white">Admin API Token</div>
+            <div className="mt-1 text-xs text-[#8f97aa]">Must match backend ADMIN_API_TOKEN when enabled.</div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <Input type="password" value={adminApiToken} onChange={(event) => setAdminApiTokenValue(event.target.value)} placeholder="ADMIN_API_TOKEN" className="h-11 border-white/[0.08] bg-white/[0.03] text-white placeholder:text-[#667085]" />
+          {adminApiTokenMessage ? <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{adminApiTokenMessage}</div> : null}
+          <Button type="button" onClick={saveAdminApiToken} className="h-11 rounded-xl bg-cyan-400 px-5 text-black hover:bg-cyan-300">
+            Save Admin API Token
           </Button>
         </div>
       </div>

@@ -1,3 +1,5 @@
+import { withAdminHeaders } from "./adminApi";
+
 const BACKEND_API = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "";
 
 export interface DataBackupItem {
@@ -50,11 +52,7 @@ function makeBackendUrl(path: string) {
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(makeBackendUrl(path), {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    ...withAdminHeaders(init, true),
   });
   const text = await response.text();
   const data = text ? JSON.parse(text) as { error?: string } : {};
@@ -78,6 +76,19 @@ export function deleteDataBackup(fileName: string) {
   return requestJson<{ ok: true }>(`/api/admin/data/backups/${encodeURIComponent(fileName)}`, { method: "DELETE" });
 }
 
-export function getDataBackupDownloadUrl(fileName: string) {
-  return makeBackendUrl(`/api/admin/data/backups/${encodeURIComponent(fileName)}`);
+export async function downloadDataBackup(fileName: string) {
+  const response = await fetch(makeBackendUrl(`/api/admin/data/backups/${encodeURIComponent(fileName)}`), withAdminHeaders());
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Request failed: ${response.status}`);
+  }
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

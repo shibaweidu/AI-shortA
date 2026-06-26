@@ -13,6 +13,8 @@ Use one application container, one PostgreSQL container or managed PostgreSQL in
 
 Run a single `ai-shorta` replica until the job queue is moved to Redis/BullMQ or another shared worker queue. The current app recovers persisted active jobs after restart, but concurrent replicas would each have their own in-memory queue.
 
+Set `ADMIN_API_TOKEN` to a long random value and set the same value in the admin settings page after login. Production also requires `CORS_ALLOWED_ORIGINS` to include the public site origin, for example `https://ai.appkaola.com`.
+
 ```bash
 docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```

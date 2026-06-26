@@ -75,10 +75,15 @@ const UPSTREAM_TIMEOUT_RECOVERY_POLL_MS = Number(process.env.IMAGE_JOB_524_RECOV
 const UPSTREAM_LOG_ACCESS_TOKEN = (process.env.IMAGE_JOB_LOG_ACCESS_TOKEN ?? process.env.NEW_API_ACCESS_TOKEN ?? process.env.ONE_API_ACCESS_TOKEN ?? "").trim();
 const UPSTREAM_LOG_COOKIE = (process.env.IMAGE_JOB_LOG_COOKIE ?? "").trim();
 const FORCE_IPV4_OUTBOUND = process.env.IMAGE_JOB_FORCE_IPV4 !== "0";
-const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT ?? "200mb";
+const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT ?? (process.env.NODE_ENV === "production" ? "50mb" : "200mb");
 const RATE_LIMIT_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_SECONDS ?? 60) * 1000;
 const DEFAULT_RATE_LIMIT_MAX_REQUESTS = process.env.NODE_ENV === "production" ? 300 : 0;
 const RATE_LIMIT_MAX_REQUESTS = Number(process.env.RATE_LIMIT_MAX_REQUESTS ?? DEFAULT_RATE_LIMIT_MAX_REQUESTS);
+const ADMIN_API_TOKEN = (process.env.ADMIN_API_TOKEN ?? "").trim();
+const CORS_ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS ?? PUBLIC_BASE_URL)
+  .split(",")
+  .map((origin) => origin.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
 
 if (FORCE_IPV4_OUTBOUND) {
   setDefaultResultOrder("ipv4first");
@@ -587,7 +592,20 @@ const DEFAULT_GENERATED_PUBLISH_SETTINGS: GeneratedPublishSettings = {
 };
 let generatedPublishSettings: GeneratedPublishSettings = { ...DEFAULT_GENERATED_PUBLISH_SETTINGS };
 
-app.use(cors());
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+    const normalizedOrigin = origin.replace(/\/+$/, "");
+    if (CORS_ALLOWED_ORIGINS.includes(normalizedOrigin) || (process.env.NODE_ENV !== "production" && CORS_ALLOWED_ORIGINS.length === 0)) {
+      callback(null, true);
+      return;
+    }
+    callback(null, false);
+  },
+}));
 app.set("trust proxy", process.env.TRUST_PROXY ?? "loopback");
 app.use((request, response, next) => {
   const requestId = typeof request.headers["x-request-id"] === "string" && request.headers["x-request-id"].trim()
@@ -623,6 +641,43 @@ app.use((request, response, next) => {
     for (const [bucketKey, value] of rateLimitBuckets.entries()) {
       if (value.resetAt <= now) rateLimitBuckets.delete(bucketKey);
     }
+  }
+  next();
+});
+
+function getRequestAdminToken(request: express.Request) {
+  const headerToken = request.headers["x-admin-token"];
+  if (typeof headerToken === "string" && headerToken.trim()) return headerToken.trim();
+  const authorization = request.headers.authorization;
+  if (typeof authorization === "string" && authorization.toLowerCase().startsWith("bearer ")) {
+    return authorization.slice(7).trim();
+  }
+  return "";
+}
+
+function isAdminProtectedPath(method: string, path: string) {
+  if (path.startsWith("/api/admin")) return true;
+  if (path === "/api/generated-works/publish") return true;
+  if (path.startsWith("/api/collection/classifier-settings")) return true;
+  if (path.startsWith("/api/collection/generated-publish-settings")) return true;
+  if (path.startsWith("/api/collection/civitai-token")) return true;
+  if (path.startsWith("/api/collection/sources")) return true;
+  if (path.startsWith("/api/collection/runs")) return true;
+  if (path === "/api/collection/run-enabled") return true;
+  if (path === "/api/collection/works") return true;
+  if (path.startsWith("/api/collection/works/batch")) return true;
+  if (path.startsWith("/api/collection/works/") && method !== "GET" && !path.endsWith("/broken")) return true;
+  return false;
+}
+
+app.use((request, response, next) => {
+  if (!ADMIN_API_TOKEN || request.method === "OPTIONS" || !isAdminProtectedPath(request.method, request.path)) {
+    next();
+    return;
+  }
+  if (getRequestAdminToken(request) !== ADMIN_API_TOKEN) {
+    response.status(401).json({ error: "Admin API token is required" });
+    return;
   }
   next();
 });

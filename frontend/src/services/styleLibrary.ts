@@ -1,3 +1,5 @@
+import { withAdminHeaders } from "./adminApi";
+
 const BACKEND_API = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") || "";
 
 export interface StyleCategory {
@@ -31,12 +33,18 @@ function makeBackendUrl(path: string) {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const isAdminRequest = path.startsWith("/api/admin/");
+  const requestInit = isAdminRequest
+    ? withAdminHeaders(init, true)
+    : {
+        ...init,
+        headers: {
+          "Content-Type": "application/json",
+          ...(init?.headers ?? {}),
+        },
+      };
   const response = await fetch(makeBackendUrl(path), {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    ...requestInit,
   });
   if (!response.ok) {
     const text = await response.text();
