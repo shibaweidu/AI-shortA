@@ -160,7 +160,55 @@ export const useUserModelStore = create<UserModelState>()(
         const removedIds = removed ? modelTypes.flatMap((type) => removed.models[type].flatMap((model) => getProviderModelLookupValues(providerId, model.id))) : [];
         return { providers: state.providers.filter((provider) => provider.id !== providerId), routing: removeModelsFromRouting(state.routing, removedIds) };
       }),
-      addProviderModel: (providerId, type, model) => set((state) => ({ providers: state.providers.map((provider) => provider.id !== providerId || provider.models[type].some((item) => item.id === model.id) ? provider : { ...provider, models: { ...provider.models, [type]: [...provider.models[type], { id: model.id.trim(), name: model.name.trim() || model.id.trim(), type, thumbnailUrl: model.thumbnailUrl?.trim() || undefined, providerDisplayName: model.providerDisplayName?.trim() || undefined, description: model.description?.trim() || undefined, tags: model.tags?.filter(Boolean), credits: typeof model.credits === "number" ? model.credits : undefined, apiRoutes: normalizeModelApiRoutes(model.apiRoutes, getDefaultModelApiRoutes({ providerId: provider.id, providerName: provider.name, providerBaseUrl: provider.baseUrl, modelId: model.id.trim(), modelName: model.name.trim() || model.id.trim(), type }), type) }] } }) })),
+      addProviderModel: (providerId, type, model) => set((state) => {
+        const modelId = model.id.trim();
+        const modelValue = buildProviderModelValue(providerId, modelId);
+        let added = false;
+
+        return {
+          providers: state.providers.map((provider) => {
+            if (provider.id !== providerId || !modelId || provider.models[type].some((item) => item.id === modelId)) return provider;
+            added = true;
+            return {
+              ...provider,
+              models: {
+                ...provider.models,
+                [type]: [
+                  ...provider.models[type],
+                  {
+                    id: modelId,
+                    name: model.name.trim() || modelId,
+                    type,
+                    thumbnailUrl: model.thumbnailUrl?.trim() || undefined,
+                    providerDisplayName: model.providerDisplayName?.trim() || undefined,
+                    description: model.description?.trim() || undefined,
+                    tags: model.tags?.filter(Boolean),
+                    credits: typeof model.credits === "number" ? model.credits : undefined,
+                    apiRoutes: normalizeModelApiRoutes(
+                      model.apiRoutes,
+                      getDefaultModelApiRoutes({
+                        providerId: provider.id,
+                        providerName: provider.name,
+                        providerBaseUrl: provider.baseUrl,
+                        modelId,
+                        modelName: model.name.trim() || modelId,
+                        type,
+                      }),
+                      type
+                    ),
+                  },
+                ],
+              },
+            };
+          }),
+          routing: added
+            ? {
+                ...state.routing,
+                [type]: state.routing[type].includes(modelValue) ? state.routing[type] : [...state.routing[type], modelValue],
+              }
+            : state.routing,
+        };
+      }),
       updateProviderModel: (providerId, type, modelId, data) => set((state) => {
         const nextId = data.id?.trim() || modelId;
         return {

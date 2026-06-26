@@ -7,6 +7,7 @@ export type ModelApiEndpoint =
   | "/responses"
   | "/video/generations"
   | "/videos"
+  | "/v1/videos"
   | "/async/generations"
   | "/video/create"
   | "/v1/video/create";
@@ -23,6 +24,7 @@ export const MODEL_API_ROUTE_OPTIONS: Record<ModelType, Array<{ endpoint: ModelA
     { endpoint: "/images/edits", label: "Images Edits" },
     { endpoint: "/chat/completions", label: "Chat Completions" },
     { endpoint: "/responses", label: "Responses" },
+    { endpoint: "/v1/videos", label: "Newtoken Async (v1/videos)" },
   ],
   video: [
     { endpoint: "/chat/completions", label: "Chat Completions" },
@@ -62,6 +64,16 @@ function isQiyuanProviderText(text: string) {
   return text.includes("mingyu.it.com") || text.includes("启元") || text.includes("qiyuan");
 }
 
+function isNewtokenProviderText(text: string) {
+  return text.includes("newtoken") || text.includes("newtoken.club");
+}
+
+// newtoken 的 GPT Image 2：模型名含 gpt-image2（其专有命名，比域名可靠）。
+// 带 _sync 后缀走同步 /images/generations，否则走异步 /v1/videos。
+function isNewtokenGptImage2ModelText(text: string) {
+  return /gpt-?image-?2/i.test(text);
+}
+
 export function getDefaultModelApiRoutes(input: {
   providerId?: string;
   providerName?: string;
@@ -76,6 +88,12 @@ export function getDefaultModelApiRoutes(input: {
   if (input.type === "language") return uniqEndpoints(["/chat/completions"], input.type);
 
   if (input.type === "image") {
+    if (isNewtokenGptImage2ModelText(modelText)) {
+      // _sync 后缀走同步图片接口，否则走异步 /v1/videos（图片任务也走这个）。
+      return modelText.includes("_sync")
+        ? uniqEndpoints(["/images/generations"], input.type)
+        : uniqEndpoints(["/v1/videos"], input.type);
+    }
     if (isMaomiNewApiProviderText(providerText) || modelText.includes("nano-banana-2")) {
       return uniqEndpoints(["/chat/completions"], input.type);
     }
@@ -118,7 +136,7 @@ export function shouldForceDefaultModelApiRoutes(input: {
 }) {
   const providerText = `${input.providerId ?? ""} ${input.providerName ?? ""} ${input.providerBaseUrl ?? ""}`.toLowerCase();
   const modelText = `${input.modelId} ${input.modelName ?? ""}`.toLowerCase();
-  if (input.type === "image") return isMaomiNewApiProviderText(providerText) || modelText.includes("nano-banana-2");
+  if (input.type === "image") return isMaomiNewApiProviderText(providerText) || modelText.includes("nano-banana-2") || (isNewtokenProviderText(providerText) && isNewtokenGptImage2ModelText(modelText));
   if (input.type === "video") {
     return isMaomiNewApiProviderText(providerText)
       || modelText.includes("seedance-2.0")

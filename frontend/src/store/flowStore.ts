@@ -56,6 +56,7 @@ interface FlowState {
   projects: FlowProject[];
   items: FlowItem[];
   deletedItemIds: string[];
+  deletedProjectIds: string[];
   hasHydrated: boolean;
   setHasHydrated: (value: boolean) => void;
   addProject: (input: { name: string }) => string;
@@ -67,14 +68,14 @@ interface FlowState {
   clearAll: () => void;
 }
 
-type PersistedFlowState = Pick<FlowState, "projects" | "items">;
-type PersistedFlowStateV2 = Pick<FlowState, "projects" | "items" | "deletedItemIds">;
+type PersistedFlowStateV2 = Pick<FlowState, "projects" | "items" | "deletedItemIds" | "deletedProjectIds">;
 
 function createDefaultState(): PersistedFlowStateV2 {
   return {
     projects: [],
     items: [],
     deletedItemIds: [],
+    deletedProjectIds: [],
   };
 }
 
@@ -91,10 +92,12 @@ function getCurrentFlowScopeId() {
 function getPersistedFlowCounts(value?: string | null) {
   if (typeof value !== "string") return null;
   try {
-    const state = (JSON.parse(value) as { state?: Partial<PersistedFlowState> }).state;
+    const state = (JSON.parse(value) as { state?: Partial<PersistedFlowStateV2> }).state;
     return {
       projects: Array.isArray(state?.projects) ? state.projects.length : 0,
       items: Array.isArray(state?.items) ? state.items.length : 0,
+      deletedItemIds: Array.isArray(state?.deletedItemIds) ? state.deletedItemIds.length : 0,
+      deletedProjectIds: Array.isArray(state?.deletedProjectIds) ? state.deletedProjectIds.length : 0,
     };
   } catch {
     return null;
@@ -114,6 +117,8 @@ function shouldSkipEmptyFlowOverwrite(value: string, backendValue: string | null
       backendCounts &&
       nextCounts.projects === 0 &&
       nextCounts.items === 0 &&
+      nextCounts.deletedItemIds === 0 &&
+      nextCounts.deletedProjectIds === 0 &&
       (backendCounts.projects > 0 || backendCounts.items > 0)
   );
 }
@@ -286,6 +291,10 @@ function normalizeDeletedItemIds(input: unknown) {
     .filter((value): value is string => Boolean(value));
 }
 
+function normalizeDeletedProjectIds(input: unknown) {
+  return normalizeDeletedItemIds(input);
+}
+
 function reconcileData(projects: FlowProject[], items: FlowItem[]) {
   const nextProjects = [...projects];
   const existingIds = new Set(nextProjects.map((project) => project.id));
@@ -409,6 +418,7 @@ export const useFlowStore = create<FlowState>()(
             projects: state.projects.filter((project) => project.id !== id),
             items: state.items.filter((item) => item.projectId !== id),
             deletedItemIds: Array.from(new Set([...state.deletedItemIds, ...removedItemIds])),
+            deletedProjectIds: state.deletedProjectIds.includes(id) ? state.deletedProjectIds : [...state.deletedProjectIds, id],
           };
         });
       },
@@ -511,27 +521,35 @@ export const useFlowStore = create<FlowState>()(
         projects: state.projects,
         items: state.items.map(pruneFlowItemForPersistence),
         deletedItemIds: state.deletedItemIds,
+        deletedProjectIds: state.deletedProjectIds,
       }),
       merge: (persistedState, currentState) => {
         const raw = (persistedState ?? {}) as Partial<PersistedFlowStateV2>;
-        const projects = normalizeProjects(raw.projects);
         const deletedItemIds = normalizeDeletedItemIds(raw.deletedItemIds);
-        const items = normalizeItems(raw.items).filter((item) => !deletedItemIds.includes(item.id));
+        const deletedProjectIds = normalizeDeletedProjectIds(raw.deletedProjectIds);
+        const mergedDeletedItemIds = Array.from(new Set([...(currentState.deletedItemIds ?? []), ...deletedItemIds]));
+        const mergedDeletedProjectIds = Array.from(new Set([...(currentState.deletedProjectIds ?? []), ...deletedProjectIds]));
+        const deletedItemIdSet = new Set(mergedDeletedItemIds);
+        const deletedProjectIdSet = new Set(mergedDeletedProjectIds);
+        const projects = normalizeProjects(raw.projects).filter((project) => !deletedProjectIdSet.has(project.id));
+        const items = normalizeItems(raw.items).filter(
+          (item) => !deletedItemIdSet.has(item.id) && !deletedProjectIdSet.has(item.projectId)
+        );
         const reconciledBase = reconcileData(projects, items);
         const merged = mergeWithLocalTransientItems(
           reconciledBase.projects,
           reconciledBase.items,
-          currentState.projects,
-          currentState.items.filter((item) => !deletedItemIds.includes(item.id))
+          currentState.projects.filter((project) => !deletedProjectIdSet.has(project.id)),
+          currentState.items.filter((item) => !deletedItemIdSet.has(item.id) && !deletedProjectIdSet.has(item.projectId))
         );
-        const mergedDeletedItemIds = Array.from(new Set([...(currentState.deletedItemIds ?? []), ...deletedItemIds]));
 
         return {
           ...currentState,
           ...createDefaultState(),
           projects: merged.projects,
-          items: merged.items.filter((item) => !mergedDeletedItemIds.includes(item.id)),
+          items: merged.items.filter((item) => !deletedItemIdSet.has(item.id) && !deletedProjectIdSet.has(item.projectId)),
           deletedItemIds: mergedDeletedItemIds,
+          deletedProjectIds: mergedDeletedProjectIds,
         };
       },
     } as PersistOptions<FlowState, PersistedFlowStateV2>

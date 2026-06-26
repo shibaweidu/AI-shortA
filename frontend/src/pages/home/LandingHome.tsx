@@ -28,7 +28,7 @@ import {
   getVideoDurationOptionsForModel,
 } from "../../lib/generatorOptions";
 import { generateImageAsset, generateVideoAsset } from "../../services/media";
-import { fetchHomeFeed, publishGeneratedWork, reportCollectionImageBroken, type CollectionWork } from "../../services/collection";
+import { fetchHomeFeed, reportCollectionImageBroken, type CollectionWork } from "../../services/collection";
 
 function padNumber(value: number) {
   return value.toString().padStart(2, "0");
@@ -409,20 +409,6 @@ export default function LandingHome() {
               return;
             }
             updateItem(itemId, { status: "completed", url });
-            void publishGeneratedWork({
-              itemId,
-              projectId,
-              userId: currentUserId ?? undefined,
-              mediaType: "image",
-              url,
-              prompt: itemPrompt,
-              model: modelLabel,
-              aspectRatio,
-              resolution,
-              metadata: { modelValue: model },
-            }).catch((error) => {
-              if (localStorage.getItem("media-debug") === "1") console.log("[media-debug] publish generated image failed", error);
-            });
             return;
           }
 
@@ -445,20 +431,6 @@ export default function LandingHome() {
             return;
           }
           updateItem(itemId, { status: "completed", url, progress: 100 });
-          void publishGeneratedWork({
-            itemId,
-            projectId,
-            userId: currentUserId ?? undefined,
-            mediaType: "video",
-            url,
-            prompt: itemPrompt,
-            model: modelLabel,
-            aspectRatio,
-            resolution,
-            metadata: { modelValue: model, duration },
-          }).catch((error) => {
-            if (localStorage.getItem("media-debug") === "1") console.log("[media-debug] publish generated video failed", error);
-          });
         } catch (error) {
           if (localStorage.getItem("media-debug") === "1") console.log("[media-debug] generation failed", error);
           updateItem(itemId, {

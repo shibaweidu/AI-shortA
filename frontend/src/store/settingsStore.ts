@@ -272,10 +272,16 @@ models: emptyModelGroup(),
         }),
 
       addProviderModel: (providerId, type, model) =>
-        set((state) => ({
-          providers: state.providers.map((provider) => {
+        set((state) => {
+          const modelId = model.id.trim();
+          const modelValue = buildProviderModelValue(providerId, modelId);
+          let added = false;
+
+          return {
+            providers: state.providers.map((provider) => {
             if (provider.id !== providerId) return provider;
-            if (provider.models[type].some((item) => item.id === model.id)) return provider;
+            if (!modelId || provider.models[type].some((item) => item.id === modelId)) return provider;
+            added = true;
 
             return {
               ...provider,
@@ -284,8 +290,8 @@ models: emptyModelGroup(),
                 [type]: [
                   ...provider.models[type],
                    {
-                     id: model.id.trim(),
-                     name: model.name.trim() || model.id.trim(),
+                     id: modelId,
+                     name: model.name.trim() || modelId,
                      type,
                      thumbnailUrl: model.thumbnailUrl?.trim() || undefined,
                      providerDisplayName: model.providerDisplayName?.trim() || undefined,
@@ -298,8 +304,8 @@ models: emptyModelGroup(),
                          providerId: provider.id,
                          providerName: provider.name,
                          providerBaseUrl: provider.baseUrl,
-                         modelId: model.id.trim(),
-                         modelName: model.name.trim() || model.id.trim(),
+                         modelId,
+                         modelName: model.name.trim() || modelId,
                          type,
                        }),
                        type
@@ -308,8 +314,17 @@ models: emptyModelGroup(),
                  ],
                },
             };
-          }),
-        })),
+            }),
+            routing: added
+              ? {
+                  ...state.routing,
+                  [type]: state.routing[type].includes(modelValue)
+                    ? state.routing[type]
+                    : [...state.routing[type], modelValue],
+                }
+              : state.routing,
+          };
+        }),
 
       updateProviderModel: (providerId, type, modelId, data) =>
         set((state) => {

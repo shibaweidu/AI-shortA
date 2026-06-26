@@ -193,6 +193,11 @@ function isGptImageModel(model: ProviderModel) {
   return `${model.id} ${model.name}`.toLowerCase().includes("gpt-image");
 }
 
+// newtoken 的 GPT Image 2：模型名含 gpt-image2（其专有命名）。同步/异步按模型配置的端点区分。
+function isNewtokenGptImage2Model(model: ProviderModel) {
+  return /gpt-?image-?2/i.test(`${model.id} ${model.name}`);
+}
+
 function isGeekAIProvider(provider: ProviderConfig) {
   const value = `${provider.id} ${provider.name} ${provider.baseUrl}`.toLowerCase();
   return value.includes("geekai") || value.includes("geeknow.top") || value.includes("geeknow.ai");
@@ -318,6 +323,11 @@ function normalizeSingleImageVideoPayload(payload: Record<string, unknown>) {
 
 function getModelApiEndpoints(provider: ProviderConfig, model: ProviderModel, type: ModelType): ModelApiEndpoint[] {
   if (type === "image" && (isMaomiNewApiProvider(provider) || isMaomiNewApiImageModel(model))) return ["/chat/completions"];
+  // newtoken GPT Image 2：强制按模型名定端点，避免历史配置残留导致异步模型误走同步接口。
+  // 不带 _sync → 异步 /v1/videos；带 _sync → 同步 /images/generations。
+  if (type === "image" && isNewtokenGptImage2Model(model)) {
+    return `${model.id} ${model.name}`.toLowerCase().includes("_sync") ? ["/images/generations"] : ["/v1/videos"];
+  }
   if (type === "video" && (isMaomiNewApiProvider(provider) || isMaomiNewApiVideoModel(model))) return ["/chat/completions"];
   if (type === "video" && isZexiProvider(provider) && isZexiSeedanceModel(model)) return ["/videos"];
   const configured = getEnabledModelApiEndpoints(model, type);
@@ -887,6 +897,31 @@ function buildOpenAIImagePayload(modelId: string, prompt: string, n: number, siz
   if (referenceImages && referenceImages.length > 0) {
     payload.reference_images = referenceImages;
   }
+  return payload;
+}
+
+// newtoken 同步接口 /v1/images/generations：OpenAI 风格，但 n 仅支持 1，参考图用 images 数组。
+function buildNewtokenSyncImagePayload(modelId: string, prompt: string, size?: string, referenceImages?: string[]) {
+  const payload: Record<string, unknown> = { model: modelId, prompt, n: 1 };
+  if (size) payload.size = size;
+  if (referenceImages && referenceImages.length > 0) payload.images = referenceImages;
+  return payload;
+}
+
+// newtoken 异步接口 /v1/videos（图片也走这个）：{ model, prompt, aspect_ratio, images? }。
+// aspect_ratio 仅支持 16:9/9:16/3:4/4:3/1:1，其它回落 1:1。seconds 省略（默认按 "4" 处理）。
+function normalizeNewtokenAspectRatio(ratio?: string) {
+  const allowed = ["16:9", "9:16", "3:4", "4:3", "1:1"];
+  return ratio && allowed.includes(ratio) ? ratio : "1:1";
+}
+
+function buildNewtokenAsyncImagePayload(modelId: string, prompt: string, ratio?: string, referenceImages?: string[]) {
+  const payload: Record<string, unknown> = {
+    model: modelId,
+    prompt,
+    aspect_ratio: normalizeNewtokenAspectRatio(ratio),
+  };
+  if (referenceImages && referenceImages.length > 0) payload.images = referenceImages;
   return payload;
 }
 
@@ -1467,6 +1502,52 @@ requestPrompt = buildStyleReferenceInstruction({
     ]);
     const imageUrls = parseImageResponses(response);
     return imageUrls;
+  }
+
+  // newtoken GPT Image 2：以模型名识别（gpt-image2 是其专有命名，比域名可靠）。
+  // 同步/异步按模型配置的端点区分：含 /v1/videos → 异步；否则按 /images/generations 同步处理。
+  // 在通用 gpt-image 分支之前处理（gpt-image2 也会命中 isGptImageModel）。
+  if (isNewtokenGptImage2Model(model)) {
+    const configuredEndpoints = getModelApiEndpoints(provider, model, "image");
+    const isAsync = configuredEndpoints.includes("/v1/videos");
+    const refImages = normalizedReferenceImages.length > 0 ? normalizedReferenceImages : undefined;
+    const newtokenAttempt = isAsync
+      ? {
+          label: "newtoken gpt-image2 async",
+          endpoint: "/v1/videos" as const,
+          payload: buildNewtokenAsyncImagePayload(model.id, requestPrompt, ratio, refImages),
+          referenceImages: undefined,
+          useImageEdit: false,
+          mediaType: "image" as const,
+        }
+      : {
+          label: "newtoken gpt-image2 sync",
+          endpoint: "/images/generations" as const,
+          payload: buildNewtokenSyncImagePayload(model.id, requestPrompt, size, refImages),
+          referenceImages: undefined,
+          useImageEdit: false,
+          mediaType: "image" as const,
+        };
+    try {
+      const job = await createBackendImageJob({
+        provider,
+        endpoint: newtokenAttempt.endpoint,
+        payload: newtokenAttempt.payload,
+        referenceImages: newtokenAttempt.referenceImages,
+        useImageEdit: newtokenAttempt.useImageEdit,
+        clientTaskId,
+        attempts: [newtokenAttempt],
+        mediaType: "image",
+      });
+      const url = job.status === "completed" && job.resultUrl ? absolutizeBackendUrl(job.resultUrl) : await waitForBackendImageJob(job.id);
+      return [url];
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (/Failed to fetch|NetworkError|ERR_CONNECTION_REFUSED/i.test(message)) {
+        throw new Error(`Backend image job service is unavailable. Start the backend service on ${BACKEND_API}. ${message}`);
+      }
+      throw error;
+    }
   }
 
   const isGptImage = isGptImageModel(model);

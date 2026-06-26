@@ -902,6 +902,10 @@ app.put("/api/collection/generated-publish-settings", (request, response) => {
 app.post("/api/generated-works/publish", async (request, response) => {
   const body = asPlainRecord(request.body);
   const mediaType: MediaJobType = body.mediaType === "video" ? "video" : "image";
+  if (body.manual !== true) {
+    response.json({ ok: true, work: null, skipped: true });
+    return;
+  }
   try {
     const work = await publishGeneratedWork({
       itemId: getStringField(body, "itemId") || undefined,
@@ -997,6 +1001,15 @@ function filterCollectionWorks(input: { status?: string; categoryId?: string; in
     .filter((work) => input.includeNsfw || !work.nsfw)
     .filter((work) => !input.categoryId || work.categoryId === input.categoryId)
     .sort(compareCollectionWorks);
+}
+
+function isAdminPublishedGeneratedWork(work: CollectionWork) {
+  if (work.provider !== "generated") return true;
+  const metadata = work.metadata ?? {};
+  return metadata.manual === true
+    || metadata.entry === "admin-collection-publish"
+    || work.sourceWorkId?.startsWith("admin-generated-") === true
+    || (typeof metadata.itemId === "string" && metadata.itemId.startsWith("admin-generated-"));
 }
 
 function paginateCollectionWorks(works: CollectionWork[], cursor: string | undefined, limit: number) {
@@ -1565,7 +1578,7 @@ app.get("/api/collection/works", (request, response) => {
 
 app.get("/api/collection/works/:id", (request, response) => {
   const work = collectionLibrary.works.find((item) => item.id === request.params.id);
-  if (!work || work.status === "broken" || work.status === "rejected") {
+  if (!work || work.status === "broken" || work.status === "rejected" || !isAdminPublishedGeneratedWork(work)) {
     response.status(404).json({ error: "work not found" });
     return;
   }
@@ -1574,7 +1587,7 @@ app.get("/api/collection/works/:id", (request, response) => {
 
 app.get("/api/collection/works/:id/related", (request, response) => {
   const work = collectionLibrary.works.find((item) => item.id === request.params.id);
-  if (!work || work.status === "broken" || work.status === "rejected") {
+  if (!work || work.status === "broken" || work.status === "rejected" || !isAdminPublishedGeneratedWork(work)) {
     response.status(404).json({ error: "work not found" });
     return;
   }
@@ -1586,6 +1599,7 @@ app.get("/api/collection/works/:id/related", (request, response) => {
   const related = collectionLibrary.works
     .filter((item) => item.id !== work.id)
     .filter((item) => item.status === "published" && !item.nsfw)
+    .filter(isAdminPublishedGeneratedWork)
     .map((item) => {
       const sharedTags = item.tags.reduce((count, tag) => count + (tags.has(tag.toLowerCase()) ? 1 : 0), 0);
       const categoryMatch = item.categoryId === work.categoryId ? 3 : 0;
@@ -1715,7 +1729,7 @@ app.get("/api/feed/home", (request, response) => {
   const cursor = typeof request.query.cursor === "string" ? request.query.cursor : undefined;
   const limitValue = Number.parseInt(typeof request.query.limit === "string" ? request.query.limit : "30", 10);
   const limit = Math.max(1, Math.min(60, Number.isFinite(limitValue) ? limitValue : 30));
-  const filtered = filterCollectionWorks({ status: "published", categoryId, includeNsfw: false });
+  const filtered = filterCollectionWorks({ status: "published", categoryId, includeNsfw: false }).filter(isAdminPublishedGeneratedWork);
   const page = paginateCollectionWorks(filtered, cursor, limit);
   response.json({
     items: page.items.map(getCollectionPublicWork),
@@ -3414,6 +3428,71 @@ function normalizeVideoPayloadImageFields(payload: Record<string, unknown>, medi
   return normalized;
 }
 
+function isNewtokenProviderText(text: string) {
+  return text.includes("newtoken") || text.includes("newtoken.club");
+}
+
+function isNewtokenGptImage2ModelText(text: string) {
+  return /gpt-?image-?2/i.test(text);
+}
+
+function isNewtokenAsyncGptImage2Request(provider: Record<string, unknown> | undefined, payload: Record<string, unknown> | undefined) {
+  const providerText = `${provider?.id ?? ""} ${provider?.name ?? ""} ${provider?.baseUrl ?? ""}`.toLowerCase();
+  const modelText = typeof payload?.model === "string" ? payload.model.toLowerCase() : "";
+  return isNewtokenProviderText(providerText) && isNewtokenGptImage2ModelText(modelText) && !modelText.includes("_sync");
+}
+
+function normalizeNewtokenGptImage2AspectRatio(payload: Record<string, unknown>) {
+  const value = typeof payload.aspect_ratio === "string" ? payload.aspect_ratio : typeof payload.ratio === "string" ? payload.ratio : "";
+  return ["16:9", "9:16", "3:4", "4:3", "1:1"].includes(value) ? value : "1:1";
+}
+
+function normalizeNewtokenGptImage2Attempt(attempt: ImageJobAttempt): ImageJobAttempt {
+  const input = attempt.payload;
+  const images = [
+    ...(Array.isArray(input.images) ? input.images : []),
+    ...(Array.isArray(input.reference_images) ? input.reference_images : []),
+    ...(Array.isArray(input.referenceImages) ? input.referenceImages : []),
+  ].filter((value): value is string => typeof value === "string" && Boolean(value));
+  const payload: Record<string, unknown> = {
+    model: input.model,
+    prompt: input.prompt,
+    aspect_ratio: normalizeNewtokenGptImage2AspectRatio(input),
+  };
+  if (images.length) payload.images = Array.from(new Set(images));
+  return {
+    ...attempt,
+    label: "newtoken gpt-image2 async",
+    endpoint: "/v1/videos",
+    payload,
+    referenceImages: undefined,
+    useImageEdit: false,
+    mediaType: "image",
+  };
+}
+
+function normalizeNewtokenGptImage2JobRequest(
+  provider: Record<string, unknown> | undefined,
+  endpoint: string,
+  payload: Record<string, unknown> | undefined,
+  attempts: ImageJobAttempt[] | undefined,
+) {
+  if (!isNewtokenAsyncGptImage2Request(provider, payload)) return { endpoint, payload, attempts };
+
+  const baseAttempt: ImageJobAttempt = {
+    label: "newtoken gpt-image2 async",
+    endpoint,
+    payload: payload!,
+    mediaType: "image",
+  };
+  const normalized = normalizeNewtokenGptImage2Attempt(baseAttempt);
+  return {
+    endpoint: normalized.endpoint,
+    payload: normalized.payload,
+    attempts: [normalized],
+  };
+}
+
 function summarizeVideoPayload(payload?: Record<string, unknown>) {
   if (!payload) return undefined;
   const images = Array.isArray(payload.images) ? payload.images : undefined;
@@ -3502,6 +3581,7 @@ function summarizeAppStateValue(value: string | null) {
         if (Array.isArray(list)) summary[key] = list.length;
       }
       if (Array.isArray(state.deletedItemIds)) summary.deletedItemIds = state.deletedItemIds.length;
+      if (Array.isArray(state.deletedProjectIds)) summary.deletedProjectIds = state.deletedProjectIds.length;
       if (typeof state.currentUserId === "string") summary.currentUserId = state.currentUserId;
     }
   } catch {
@@ -3526,10 +3606,14 @@ function logAppState(event: string, key: string, value: string | null) {
 function getPersistedFlowCounts(value?: string | null) {
   if (typeof value !== "string") return null;
   try {
-    const state = (JSON.parse(value) as { state?: { projects?: unknown; items?: unknown } }).state;
+    const state = (JSON.parse(value) as {
+      state?: { projects?: unknown; items?: unknown; deletedItemIds?: unknown; deletedProjectIds?: unknown };
+    }).state;
     return {
       projects: Array.isArray(state?.projects) ? state.projects.length : 0,
       items: Array.isArray(state?.items) ? state.items.length : 0,
+      deletedItemIds: Array.isArray(state?.deletedItemIds) ? state.deletedItemIds.length : 0,
+      deletedProjectIds: Array.isArray(state?.deletedProjectIds) ? state.deletedProjectIds.length : 0,
     };
   } catch {
     return null;
@@ -3545,6 +3629,8 @@ function shouldSkipEmptyFlowStateOverwrite(key: string, nextValue: string) {
       currentCounts &&
       nextCounts.projects === 0 &&
       nextCounts.items === 0 &&
+      nextCounts.deletedItemIds === 0 &&
+      nextCounts.deletedProjectIds === 0 &&
       (currentCounts.projects > 0 || currentCounts.items > 0)
   );
 }
@@ -3553,6 +3639,12 @@ function getRecordId(value: unknown) {
   if (!value || typeof value !== "object") return "";
   const id = (value as { id?: unknown }).id;
   return typeof id === "string" ? id : "";
+}
+
+function getRecordProjectId(value: unknown) {
+  if (!value || typeof value !== "object") return "";
+  const projectId = (value as { projectId?: unknown }).projectId;
+  return typeof projectId === "string" ? projectId : "";
 }
 
 function getProjectUpdatedAt(value: unknown) {
@@ -3696,10 +3788,16 @@ function mergeFlowStateValue(currentValue: string | undefined, nextValue: string
       ...getStringList(current.state?.deletedItemIds),
       ...getStringList(next.state?.deletedItemIds),
     ]));
-    const isDeletedItem = (item: unknown) => deletedItemIds.includes(getRecordId(item));
+    const deletedProjectIds = Array.from(new Set([
+      ...getStringList(current.state?.deletedProjectIds),
+      ...getStringList(next.state?.deletedProjectIds),
+    ]));
+    const isDeletedProject = (project: unknown) => deletedProjectIds.includes(getRecordId(project));
+    const isDeletedItem = (item: unknown) =>
+      deletedItemIds.includes(getRecordId(item)) || deletedProjectIds.includes(getRecordProjectId(item));
     const projects = mergeById(currentProjects, nextProjects, (currentProject, nextProject) =>
       getProjectUpdatedAt(nextProject) >= getProjectUpdatedAt(currentProject) ? nextProject : currentProject
-    );
+    ).filter((project) => !isDeletedProject(project));
     const items = mergeById(
       currentItems.filter((item) => !isDeletedItem(item)),
       nextItems.filter((item) => !isDeletedItem(item)),
@@ -3713,6 +3811,7 @@ function mergeFlowStateValue(currentValue: string | undefined, nextValue: string
         projects,
         items,
         deletedItemIds,
+        deletedProjectIds,
       },
     });
     return {
@@ -4167,7 +4266,9 @@ async function pollAsyncTask(job: ImageJob, attempt: ImageJobAttempt, taskId: st
  ...(job.provider.headers ?? {}),
  };
  
- const taskEndpoints = mediaType === "video" ? buildVideoTaskStatusEndpoints(taskId, attempt.endpoint) : [
+ // 异步图片任务若走 /videos 端点（如 newtoken GPT Image 2），任务状态同样查 /v1/videos/{id}。
+ const usesVideoEndpoint = (attempt.endpoint ?? "").toLowerCase().includes("/videos");
+ const taskEndpoints = mediaType === "video" || usesVideoEndpoint ? buildVideoTaskStatusEndpoints(taskId, attempt.endpoint) : [
  `/v1/images/tasks/${taskId}`, // New API standard endpoint (documented)
  `/images/tasks/${taskId}`, // New API without /v1
  `/v1/tasks/${taskId}`, // Generic tasks endpoint
@@ -5795,37 +5896,7 @@ function updateJob(jobId: string, updates: Partial<ImageJob>) {
   if (!job) return;
   const nextJob = { ...job, ...updates, updatedAt: Date.now() };
   jobs.set(jobId, nextJob);
-  if (updates.status === "completed" && updates.resultUrl) {
-    void publishGeneratedWorkFromJob(jobId, nextJob).catch((error) => {
-      logImageJob(jobId, "generated.publish.failed", { error: getErrorMessage(error) });
-    });
-  }
   void saveJobsSoon();
-}
-
-async function publishGeneratedWorkFromJob(jobId: string, job: ImageJob) {
-  const resultUrl = job.resultUrl;
-  if (!resultUrl) return null;
-  const mediaType = getJobMediaType(job);
-  const meta = getJobRecoveryMetadata(job);
-  return publishGeneratedWork({
-    itemId: jobId,
-    mediaType,
-    url: resultUrl,
-    prompt: meta.prompt || "",
-    model: meta.model,
-    aspectRatio: typeof job.request.payload.aspect_ratio === "string"
-      ? job.request.payload.aspect_ratio
-      : typeof job.request.payload.aspectRatio === "string"
-        ? job.request.payload.aspectRatio
-        : undefined,
-    resolution: meta.size,
-    metadata: {
-      endpoint: job.request.endpoint,
-      providerId: job.provider.id,
-      providerName: job.provider.name,
-    },
-  });
 }
 
 function getJobMediaType(job: ImageJob): MediaJobType {
@@ -6352,7 +6423,12 @@ async function runImageJobAttempt(job: ImageJob, attempt: ImageJobAttempt): Prom
   upstreamResponse = parseJsonOrText(responseText);
 
  // Check if this is an async task response
- const asyncTaskId = extractMediaUrls(upstreamResponse, mediaType).length > 0 ? null : extractMediaTaskId(upstreamResponse, mediaType);
+ const hasMediaUrl = extractMediaUrls(upstreamResponse, mediaType).length > 0;
+ // /videos 端点（含 newtoken GPT Image 2 异步图片）始终是异步：只要拿到 task_id 就轮询，不依赖 status 字段。
+ const usesVideoEndpointForTask = (endpoint ?? "").toLowerCase().includes("/videos");
+ const asyncTaskId = hasMediaUrl
+   ? null
+   : (extractMediaTaskId(upstreamResponse, mediaType) ?? (usesVideoEndpointForTask ? extractTaskIdCandidate(upstreamResponse) : null));
  if (asyncTaskId) {
   logImageJob(job.id, "attempt.async-task", { 
   label: attempt.label, 
@@ -6660,10 +6736,10 @@ app.post("/api/image-jobs", upload.none(), (request, response) => {
   const body = request.body as Record<string, unknown>;
   const provider = body.provider as Record<string, unknown> | undefined;
   const rawPayload = body.payload as Record<string, unknown> | undefined;
-  const endpoint = typeof body.endpoint === "string" ? body.endpoint : "/images/generations";
+  const rawEndpoint = typeof body.endpoint === "string" ? body.endpoint : "/images/generations";
   const mediaType: MediaJobType = body.mediaType === "video" ? "video" : "image";
-  const payload = rawPayload ? normalizeVideoPayloadImageFields(rawPayload, mediaType) : undefined;
-  const attempts = Array.isArray(body.attempts)
+  const rawNormalizedPayload = rawPayload ? normalizeVideoPayloadImageFields(rawPayload, mediaType) : undefined;
+  const rawAttempts = Array.isArray(body.attempts)
     ? body.attempts
         .map((attempt): ImageJobAttempt | null => {
           if (!attempt || typeof attempt !== "object") return null;
@@ -6681,6 +6757,10 @@ app.post("/api/image-jobs", upload.none(), (request, response) => {
         })
         .filter((attempt): attempt is ImageJobAttempt => Boolean(attempt))
     : undefined;
+  const normalizedRequest = normalizeNewtokenGptImage2JobRequest(provider, rawEndpoint, rawNormalizedPayload, rawAttempts);
+  const endpoint = normalizedRequest.endpoint;
+  const payload = normalizedRequest.payload;
+  const attempts = normalizedRequest.attempts;
   const clientTaskId = typeof body.clientTaskId === "string" && body.clientTaskId.trim() ? body.clientTaskId.trim() : undefined;
 
   logImageJob(clientTaskId ?? "job-request", "request.received", {
