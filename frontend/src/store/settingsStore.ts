@@ -111,7 +111,8 @@ function normalizeModel(model: unknown, fallbackType: ModelType, provider?: Part
     modelName: String(raw.name),
     type: fallbackType,
   });
-  const forceDefaultApiRoutes = shouldForceDefaultModelApiRoutes({
+  const hasSavedApiRoutes = Array.isArray(raw.apiRoutes);
+  const forceDefaultApiRoutes = !hasSavedApiRoutes && shouldForceDefaultModelApiRoutes({
     providerId: provider?.id,
     providerName: provider?.name,
     providerBaseUrl: provider?.baseUrl,

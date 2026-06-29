@@ -8,6 +8,7 @@ export type ModelApiEndpoint =
   | "/video/generations"
   | "/videos"
   | "/v1/videos"
+  | "/v1/async/generations"
   | "/async/generations"
   | "/video/create"
   | "/v1/video/create";
@@ -24,6 +25,7 @@ export const MODEL_API_ROUTE_OPTIONS: Record<ModelType, Array<{ endpoint: ModelA
     { endpoint: "/images/edits", label: "Images Edits" },
     { endpoint: "/chat/completions", label: "Chat Completions" },
     { endpoint: "/responses", label: "Responses" },
+    { endpoint: "/v1/async/generations", label: "Unified Async Generations" },
     { endpoint: "/v1/videos", label: "Newtoken Async (v1/videos)" },
   ],
   video: [
@@ -31,6 +33,7 @@ export const MODEL_API_ROUTE_OPTIONS: Record<ModelType, Array<{ endpoint: ModelA
     { endpoint: "/video/generations", label: "Video Generations" },
     { endpoint: "/v1/video/create", label: "Yunwu Video Create" },
     { endpoint: "/videos", label: "Videos" },
+    { endpoint: "/v1/async/generations", label: "Unified Async Generations" },
     { endpoint: "/async/generations", label: "Async Generations" },
     { endpoint: "/video/create", label: "LNAPI Video Create" },
   ],
@@ -98,7 +101,7 @@ export function getDefaultModelApiRoutes(input: {
       return uniqEndpoints(["/chat/completions"], input.type);
     }
     if (isQiyuanProviderText(providerText) || modelText.includes("nano-banana")) {
-      return uniqEndpoints(["/chat/completions", "/images/edits"], input.type);
+      return uniqEndpoints(["/v1/async/generations", "/chat/completions", "/images/edits"], input.type);
     }
     if (modelText.includes("gpt-image") || (isGeekAIProviderText(providerText) && modelText.includes("grok") && modelText.includes("image"))) {
       return uniqEndpoints(["/images/generations", "/images/edits", "/responses", "/chat/completions"], input.type);
@@ -116,9 +119,9 @@ export function getDefaultModelApiRoutes(input: {
     if (isGrokVideo) return uniqEndpoints(["/chat/completions"], input.type);
     if (modelText.includes("sora") || modelText.includes("veo")) {
       if (isQiyuanProviderText(providerText)) {
-        return uniqEndpoints(["/async/generations", "/videos", "/video/create"], input.type);
+        return uniqEndpoints(["/v1/async/generations", "/async/generations", "/videos", "/video/create"], input.type);
       }
-      return uniqEndpoints(["/videos", "/async/generations", "/video/create"], input.type);
+      return uniqEndpoints(["/videos", "/v1/async/generations", "/async/generations", "/video/create"], input.type);
     }
     return uniqEndpoints(["/video/generations"], input.type);
   }
@@ -153,18 +156,31 @@ export function normalizeModelApiRoutes(
 ): ModelApiRouteConfig[] {
   const allowed = new Set(MODEL_API_ROUTE_OPTIONS[type].map((option) => option.endpoint));
   const rawRoutes = Array.isArray(routes) ? routes : [];
-  const endpoints = rawRoutes
-    .map((route) => {
-      if (typeof route === "string") return route;
-      if (route && typeof route === "object" && typeof (route as { endpoint?: unknown }).endpoint === "string") {
-        return (route as { endpoint: string }).endpoint;
+  const normalized = rawRoutes
+    .map((route): ModelApiRouteConfig | null => {
+      if (typeof route === "string") {
+        return allowed.has(route as ModelApiEndpoint) ? { endpoint: route as ModelApiEndpoint, enabled: true } : null;
       }
-      return "";
+      if (route && typeof route === "object" && typeof (route as { endpoint?: unknown }).endpoint === "string") {
+        const endpoint = (route as { endpoint: string }).endpoint;
+        if (!allowed.has(endpoint as ModelApiEndpoint)) return null;
+        if ((route as { enabled?: unknown }).enabled === false) return null;
+        return {
+          endpoint: endpoint as ModelApiEndpoint,
+          enabled: true,
+        };
+      }
+      return null;
     })
-    .filter((endpoint): endpoint is ModelApiEndpoint => allowed.has(endpoint as ModelApiEndpoint));
+    .filter((route): route is ModelApiRouteConfig => Boolean(route));
 
-  const normalized = uniqEndpoints(endpoints, type);
-  return normalized.length ? normalized : fallback;
+  const seen = new Set<ModelApiEndpoint>();
+  const unique = normalized.filter((route) => {
+    if (seen.has(route.endpoint)) return false;
+    seen.add(route.endpoint);
+    return true;
+  });
+  return unique.length || rawRoutes.length ? unique : fallback;
 }
 
 export function getEnabledModelApiEndpoints(model: { apiRoutes?: ModelApiRouteConfig[] }, type: ModelType) {

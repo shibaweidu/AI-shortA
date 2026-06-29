@@ -198,6 +198,11 @@ function isGptImage2Model(model: ProviderModel) {
   return /gpt-?image-?2/i.test(`${model.id} ${model.name}`);
 }
 
+function isNewtokenProvider(provider: ProviderConfig) {
+  const value = `${provider.id} ${provider.name} ${provider.baseUrl}`.toLowerCase();
+  return value.includes("newtoken") || value.includes("newtoken.club");
+}
+
 function isGeekAIProvider(provider: ProviderConfig) {
   const value = `${provider.id} ${provider.name} ${provider.baseUrl}`.toLowerCase();
   return value.includes("geekai") || value.includes("geeknow.top") || value.includes("geeknow.ai");
@@ -242,6 +247,25 @@ function getQiyuanImageSize(size?: string, ratio?: string) {
   if (size === "2560x1440") return "16x9";
   if (size === "1440x2560") return "9x16";
   if (size === "1440x1440" || size === "1024x1024") return "1x1";
+  return size;
+}
+
+function getQiyuanAsyncImageSize(size?: string, ratio?: string) {
+  const ratioText = ratio && ratio !== "auto" ? ratio.replace(":", "x") : undefined;
+  const dimensions = size?.split("x").map((part) => Number.parseInt(part, 10)).filter(Number.isFinite) ?? [];
+  const [width, height] = dimensions;
+  const shortSide = dimensions.length > 0 ? Math.min(...dimensions) : 0;
+  const resolutionTier = shortSide >= 2160 ? "4k" : shortSide >= 1440 ? "2k" : shortSide >= 1024 ? "1k" : undefined;
+  const inferredRatio = ratioText
+    ?? (width && height
+      ? width === height
+        ? "1x1"
+        : width > height
+          ? "16x9"
+          : "9x16"
+      : undefined);
+  if (inferredRatio && resolutionTier) return `${inferredRatio}-${resolutionTier}`;
+  if (inferredRatio) return inferredRatio;
   return size;
 }
 
@@ -322,13 +346,12 @@ function normalizeSingleImageVideoPayload(payload: Record<string, unknown>) {
 }
 
 function getModelApiEndpoints(provider: ProviderConfig, model: ProviderModel, type: ModelType): ModelApiEndpoint[] {
+  const configured = getEnabledModelApiEndpoints(model, type);
+  if (Array.isArray(model.apiRoutes)) return configured;
+
   if (type === "image" && (isMaomiNewApiProvider(provider) || isMaomiNewApiImageModel(model))) return ["/chat/completions"];
-  // newtoken GPT Image 2：强制按模型名定端点，避免历史配置残留导致异步模型误走同步接口。
-  // 不带 _sync → 异步 /v1/videos；带 _sync → 同步 /images/generations。
   if (type === "video" && (isMaomiNewApiProvider(provider) || isMaomiNewApiVideoModel(model))) return ["/chat/completions"];
   if (type === "video" && isZexiProvider(provider) && isZexiSeedanceModel(model)) return ["/videos"];
-  const configured = getEnabledModelApiEndpoints(model, type);
-  if (configured.length) return configured;
   return getDefaultModelApiRoutes({
     providerId: provider.id,
     providerName: provider.name,
@@ -339,31 +362,58 @@ function getModelApiEndpoints(provider: ProviderConfig, model: ProviderModel, ty
   }).map((route) => route.endpoint);
 }
 
-function resolveProviderModel(modelId: string, type: ModelType): { provider: ProviderConfig; model: ProviderModel } {
+function hasExplicitModelApiRoutes(model: ProviderModel) {
+  return Array.isArray(model.apiRoutes);
+}
+
+function resolveProviderModel(modelId: string, type: ModelType): { provider: ProviderConfig; model: ProviderModel; source?: "koala" | "custom" } {
   const sourcedValue = parseSourcedProviderModelValue(modelId);
-  const providers = sourcedValue?.source === "custom" ? useUserModelStore.getState().providers : useSettingsStore.getState().providers;
+  const koalaProviders = useSettingsStore.getState().providers;
+  const customProviders = useUserModelStore.getState().providers;
+  const providers = sourcedValue?.source === "custom" ? customProviders : koalaProviders;
   const rawModelId = sourcedValue ? `${sourcedValue.providerId}::${sourcedValue.modelId}` : modelId;
   const parsedValue = sourcedValue ?? parseProviderModelValue(rawModelId);
 
   if (parsedValue) {
-    const provider = providers.find((item) => item.id === parsedValue.providerId);
-    const model = provider?.models[type].find((item) => item.id === parsedValue.modelId);
-    if (provider && model) {
-      if (!provider.baseUrl || !provider.key) {
-        throw new Error(`Provider ${provider.name} is missing API Base URL or API Key`);
+    const providerPools = sourcedValue
+      ? [{ source: sourcedValue.source, providers }]
+      : [{ source: "koala" as const, providers: koalaProviders }, { source: "custom" as const, providers: customProviders }];
+    const matches = providerPools.flatMap((pool) => {
+      const provider = pool.providers.find((item) => item.id === parsedValue.providerId);
+      const model = provider?.models[type].find((item) => item.id === parsedValue.modelId);
+      return provider && model ? [{ provider, model, source: pool.source }] : [];
+    });
+
+    if (matches.length === 1) {
+      const match = matches[0];
+      if (!match.provider.baseUrl || !match.provider.key) {
+        throw new Error(`Provider ${match.provider.name} is missing API Base URL or API Key`);
       }
-      return { provider, model };
+      return match;
+    }
+
+    if (matches.length > 1) {
+      throw new Error(`Model ${modelId} matches multiple ${type} providers. Please reselect the model so the provider-specific source is saved.`);
     }
   }
 
-  for (const provider of providers) {
-    const model = provider.models[type].find((item) => item.id === modelId);
-    if (model) {
-      if (!provider.baseUrl || !provider.key) {
-        throw new Error(`Provider ${provider.name} is missing API Base URL or API Key`);
-      }
-      return { provider, model };
+  const allProviders = sourcedValue ? providers : [...koalaProviders, ...customProviders];
+  const matches = allProviders.flatMap((provider) =>
+    provider.models[type]
+      .filter((item) => item.id === modelId)
+      .map((model) => ({ provider, model, source: customProviders.some((item) => item.id === provider.id) ? "custom" as const : "koala" as const }))
+  );
+
+  if (matches.length === 1) {
+    const match = matches[0];
+    if (!match.provider.baseUrl || !match.provider.key) {
+      throw new Error(`Provider ${match.provider.name} is missing API Base URL or API Key`);
     }
+    return match;
+  }
+
+  if (matches.length > 1) {
+    throw new Error(`Model ${modelId} matches multiple ${type} providers. Please reselect the model so the provider-specific value is saved.`);
   }
 
   throw new Error(`Model ${modelId} was not found in configured ${type} providers`);
@@ -882,6 +932,13 @@ function withQiyuanImageOptions(payload: Record<string, unknown>, size?: string,
   return payload;
 }
 
+function withQiyuanAsyncImageOptions(payload: Record<string, unknown>, size?: string, ratio?: string) {
+  const qiyuanSize = getQiyuanAsyncImageSize(size, ratio);
+  if (qiyuanSize) payload.size = qiyuanSize;
+  payload.quality = "medium";
+  return payload;
+}
+
 function withGrokImageOptions(payload: Record<string, unknown>, size?: string, ratio?: string, resolution?: string) {
   if (ratio && ratio !== "auto") payload.aspect_ratio = ratio;
   const normalizedResolution = normalizeGrokImageResolution(resolution, size);
@@ -955,6 +1012,15 @@ function buildQiyuanImagePayload(modelId: string, prompt: string, n: number, siz
   const payload = withQiyuanImageOptions({ model: modelId, prompt, n }, size, ratio);
   if (referenceImages && referenceImages.length > 0) {
     payload.reference_images = referenceImages;
+  }
+  return payload;
+}
+
+function buildUnifiedAsyncImagePayload(modelId: string, prompt: string, size?: string, ratio?: string, referenceImages?: string[]) {
+  const payload = withQiyuanAsyncImageOptions({ model: modelId, prompt, response_format: "url" }, size, ratio);
+  if (referenceImages && referenceImages.length > 0) {
+    payload.images = referenceImages;
+    payload.mode = "image_to_image";
   }
   return payload;
 }
@@ -1269,6 +1335,7 @@ async function createBackendImageJob({
     referenceImageCount: referenceImages?.length ?? 0,
     useImageEdit: useImageEdit === true,
     attemptCount: attempts?.length ?? 0,
+    attempts: attempts?.map((attempt) => ({ label: attempt.label, endpoint: attempt.endpoint, mediaType: attempt.mediaType })),
   });
   const selectedProvider = withSelectedProviderKey(provider);
   const response = await fetch(makeBackendUrl("/api/image-jobs"), {
@@ -1411,9 +1478,13 @@ const rawReferenceImages = normalizeReferenceImageUrls(referenceImageUrls, refer
 const rawStyleReferenceImages = normalizeReferenceImageUrls(styleReferenceImageUrls);
 reportImageJobClientEvent(clientTaskId, "generate.start", {
   modelId,
+  resolvedModelId: model.id,
+  resolvedModelName: model.name,
+  resolvedSource: resolved.source,
   providerId: provider.id,
   providerName: provider.name,
   providerBaseUrl: provider.baseUrl,
+  apiRoutes: model.apiRoutes,
   promptLength: prompt.length,
   rawReferenceImageCount: rawReferenceImages.length,
   rawStyleReferenceImageCount: rawStyleReferenceImages.length,
@@ -1501,61 +1572,11 @@ requestPrompt = buildStyleReferenceInstruction({
     return imageUrls;
   }
 
-  // newtoken GPT Image 2：以模型名识别（gpt-image2 是其专有命名，比域名可靠）。
-  // 同步/异步按模型配置的端点区分：含 /v1/videos → 异步；否则按 /images/generations 同步处理。
-  // 在通用 gpt-image 分支之前处理（gpt-image2 也会命中 isGptImageModel）。
   const configuredImageEndpoints = getModelApiEndpoints(provider, model, "image");
-  const useNewtokenAsyncImage = isGptImage2Model(model) && configuredImageEndpoints.includes("/v1/videos");
-  const useNewtokenSyncImage =
-    isGptImage2Model(model) &&
-    configuredImageEndpoints.length === 1 &&
-    configuredImageEndpoints[0] === "/images/generations" &&
-    `${model.id} ${model.name}`.toLowerCase().includes("_sync");
-
-  if (useNewtokenAsyncImage || useNewtokenSyncImage) {
-    const refImages = normalizedReferenceImages.length > 0 ? normalizedReferenceImages : undefined;
-    const newtokenAttempt = useNewtokenAsyncImage
-      ? {
-          label: "newtoken gpt-image2 async",
-          endpoint: "/v1/videos" as const,
-          payload: buildNewtokenAsyncImagePayload(model.id, requestPrompt, ratio, refImages),
-          referenceImages: undefined,
-          useImageEdit: false,
-          mediaType: "image" as const,
-        }
-      : {
-          label: "newtoken gpt-image2 sync",
-          endpoint: "/images/generations" as const,
-          payload: buildNewtokenSyncImagePayload(model.id, requestPrompt, size, refImages),
-          referenceImages: undefined,
-          useImageEdit: false,
-          mediaType: "image" as const,
-        };
-    try {
-      const job = await createBackendImageJob({
-        provider,
-        endpoint: newtokenAttempt.endpoint,
-        payload: newtokenAttempt.payload,
-        referenceImages: newtokenAttempt.referenceImages,
-        useImageEdit: newtokenAttempt.useImageEdit,
-        clientTaskId,
-        attempts: [newtokenAttempt],
-        mediaType: "image",
-      });
-      const url = job.status === "completed" && job.resultUrl ? absolutizeBackendUrl(job.resultUrl) : await waitForBackendImageJob(job.id);
-      return [url];
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (/Failed to fetch|NetworkError|ERR_CONNECTION_REFUSED/i.test(message)) {
-        throw new Error(`Backend image job service is unavailable. Start the backend service on ${BACKEND_API}. ${message}`);
-      }
-      throw error;
-    }
-  }
-
   const isGptImage = isGptImageModel(model);
   const isNanoBanana = isNanoBananaImageModel(model);
   const isQiyuanImage = isQiyuanImageProvider(provider);
+  const isNewtokenImage = isNewtokenProvider(provider);
   const isMaomiNewApiImage = isMaomiNewApiProvider(provider) || isMaomiNewApiImageModel(model);
   const isGeekAIGrokImage = isGeekAIProvider(provider) && isGrokImageModel(model);
   const isYunwuGrokImage = isYunwuProvider(provider) && isGrokImageModel(model);
@@ -1565,6 +1586,10 @@ requestPrompt = buildStyleReferenceInstruction({
     ? buildQiyuanImagePayload(model.id, requestPrompt, n, size, ratio, provider.useReferenceImagesParam === true ? normalizedReferenceImages : undefined)
     : buildOpenAIImagePayload(model.id, requestPrompt, n, size, ratio, provider.useReferenceImagesParam === true ? normalizedReferenceImages : undefined);
   const responsesImagePayload = buildOpenAIResponsesImagePayload(model.id, requestPrompt, normalizedReferenceImages, size);
+  const unifiedAsyncImagePayload = buildUnifiedAsyncImagePayload(model.id, requestPrompt, size, ratio, normalizedReferenceImages);
+  const newtokenReferenceImages = normalizedReferenceImages.length > 0 ? normalizedReferenceImages : undefined;
+  const newtokenAsyncImagePayload = buildNewtokenAsyncImagePayload(model.id, requestPrompt, ratio, newtokenReferenceImages);
+  const newtokenSyncImagePayload = buildNewtokenSyncImagePayload(model.id, requestPrompt, size, newtokenReferenceImages);
   const chatImagePayload = isMaomiNewApiImage
     ? buildMaomiNewApiChatImagePayload(model.id, requestPrompt, normalizedReferenceImages, size, ratio, resolution)
     : isQiyuanImage
@@ -1617,14 +1642,43 @@ requestPrompt = buildStyleReferenceInstruction({
       }];
     }
     if (endpoint === "/images/generations") {
-      return [{ ...imageAttempt, endpoint: "/images/generations", label: "openai images generations" }];
+      return [{
+        ...imageAttempt,
+        endpoint: "/images/generations",
+        label: "openai images generations",
+        payload: isNewtokenImage && isGptImage2Model(model) && `${model.id} ${model.name}`.toLowerCase().includes("_sync") ? newtokenSyncImagePayload : imageAttempt.payload,
+      }];
+    }
+    if (endpoint === "/v1/async/generations") {
+      return [{
+        label: "unified async image generations",
+        endpoint: "/v1/async/generations",
+        payload: unifiedAsyncImagePayload,
+        referenceImages: undefined,
+        useImageEdit: false,
+        mediaType: "image" as const,
+      }];
+    }
+    if (endpoint === "/v1/videos") {
+      return [{
+        label: isNewtokenImage && isGptImage2Model(model) ? "newtoken gpt-image2 async" : "v1 videos image",
+        endpoint: "/v1/videos",
+        payload: isNewtokenImage && isGptImage2Model(model) ? newtokenAsyncImagePayload : imagePayload,
+        referenceImages: undefined,
+        useImageEdit: false,
+        mediaType: "image" as const,
+      }];
     }
     return [];
   });
-  const backendAttemptsFromRoutes = routeAttempts.length ? routeAttempts : [imageAttempt];
+  if (!routeAttempts.length) {
+    throw new Error("No enabled image API endpoint is configured for this model.");
+  }
+  const backendAttemptsFromRoutes = routeAttempts;
   const firstBackendAttempt = backendAttemptsFromRoutes[0] ?? imageAttempt;
 
-  if (isGptImage || isNanoBanana || isGeekAIGrokImage || isYunwuGrokImage || actualUseImageEdit || (normalizedReferenceImages.length > 0 && supportsReferenceImagesInGenerations)) {
+  const usesBackendImageJob = backendAttemptsFromRoutes.some((attempt) => attempt.endpoint === "/v1/async/generations" || attempt.endpoint === "/v1/videos");
+  if (usesBackendImageJob || isGptImage || isNanoBanana || isGeekAIGrokImage || isYunwuGrokImage || actualUseImageEdit || (normalizedReferenceImages.length > 0 && supportsReferenceImagesInGenerations)) {
     try {
       const job = await createBackendImageJob({
         provider,
@@ -1646,32 +1700,21 @@ requestPrompt = buildStyleReferenceInstruction({
     }
   }
 
-  const attempts: JsonAttempt[] = [];
+  const attempts: JsonAttempt[] = routeAttempts.flatMap((attempt) => {
+    if (attempt.endpoint === "/images/generations") {
+      return [{ label: attempt.label, endpoints: imageGenEndpoints, payload: attempt.payload, clientTaskId }];
+    }
+    if (attempt.endpoint === "/responses") {
+      return [{ label: attempt.label, endpoints: buildOpenAIResponsesEndpointCandidates(provider.baseUrl), payload: attempt.payload, clientTaskId }];
+    }
+    if (attempt.endpoint === "/chat/completions") {
+      return [{ label: attempt.label, endpoints: chatEndpoints, payload: attempt.payload, clientTaskId }];
+    }
+    return [];
+  });
 
-  if (!useImageEdit) {
-    attempts.push({
-      label: "openai images generations",
-      endpoints: imageGenEndpoints,
-      payload: imagePayload,
-      clientTaskId,
-    });
-  }
-
-  if (!isGptImage) {
-    attempts.push(
-    {
-      label: "openai responses image generation",
-      endpoints: buildOpenAIResponsesEndpointCandidates(provider.baseUrl),
-      payload: responsesImagePayload,
-      clientTaskId,
-    },
-    {
-      label: "openai chat completions image",
-      endpoints: chatEndpoints,
-      payload: chatImagePayload,
-      clientTaskId,
-    },
-    );
+  if (!attempts.length) {
+    throw new Error("Selected image API endpoint requires backend job execution but was not routed correctly.");
   }
 
   const response = await postJsonWithFallbacks<any>(provider, attempts);
@@ -1951,6 +1994,7 @@ export async function generateVideoAsset({
           : {}),
       };
   const videoRouteEndpoints = getModelApiEndpoints(provider, model, "video");
+  const hasConfiguredVideoRoutes = hasExplicitModelApiRoutes(model);
   const isYunwuGrokVideo = isYunwuProvider(provider) && isGrokVideo;
   const yunwuGrokVideoPayload = {
     ...normalizedVideoPayload,
@@ -1998,6 +2042,14 @@ export async function generateVideoAsset({
         mediaType: "video" as const,
       }];
     }
+    if (endpoint === "/v1/async/generations") {
+      return [{
+        label: "unified async video generations",
+        endpoint: "/v1/async/generations",
+        payload: normalizedVideoPayload,
+        mediaType: "video" as const,
+      }];
+    }
     if (endpoint === "/video/create") {
       return [{
         label: "lnapi video create",
@@ -2008,12 +2060,7 @@ export async function generateVideoAsset({
     }
     return [];
   });
-  const orderedVideoBackendAttempts = isQiyuanImageProvider(provider) && (isSora || isVeo)
-    ? [...videoBackendAttempts].sort((a, b) => {
-        const priority = (endpoint: string) => endpoint === "/async/generations" ? 0 : endpoint === "/videos" ? 1 : endpoint === "/video/create" ? 2 : 3;
-        return priority(a.endpoint) - priority(b.endpoint);
-      })
-    : videoBackendAttempts;
+  const orderedVideoBackendAttempts = videoBackendAttempts;
 
   if (orderedVideoBackendAttempts.length) {
     const firstAttempt = orderedVideoBackendAttempts[0];
@@ -2030,6 +2077,10 @@ export async function generateVideoAsset({
     return job.status === "completed" && job.resultUrl
       ? absolutizeBackendUrl(job.resultUrl)
       : await waitForBackendMediaJob(job.id, "video", onProgress);
+  }
+
+  if (hasConfiguredVideoRoutes) {
+    throw new Error("No enabled video API endpoint is configured for this model.");
   }
 
   if (isGrokVideo) {
@@ -2069,6 +2120,12 @@ export async function generateVideoAsset({
       {
         label: isSora ? "sora videos" : "veo videos",
         endpoint: "/videos",
+        payload: normalizedVideoPayload,
+        mediaType: "video" as const,
+      },
+      {
+        label: "unified async video generations",
+        endpoint: "/v1/async/generations",
         payload: normalizedVideoPayload,
         mediaType: "video" as const,
       },

@@ -3591,71 +3591,6 @@ function normalizeVideoPayloadImageFields(payload: Record<string, unknown>, medi
   return normalized;
 }
 
-function isNewtokenProviderText(text: string) {
-  return text.includes("newtoken") || text.includes("newtoken.club");
-}
-
-function isNewtokenGptImage2ModelText(text: string) {
-  return /gpt-?image-?2/i.test(text);
-}
-
-function isNewtokenAsyncGptImage2Request(provider: Record<string, unknown> | undefined, payload: Record<string, unknown> | undefined) {
-  const providerText = `${provider?.id ?? ""} ${provider?.name ?? ""} ${provider?.baseUrl ?? ""}`.toLowerCase();
-  const modelText = typeof payload?.model === "string" ? payload.model.toLowerCase() : "";
-  return isNewtokenProviderText(providerText) && isNewtokenGptImage2ModelText(modelText) && !modelText.includes("_sync");
-}
-
-function normalizeNewtokenGptImage2AspectRatio(payload: Record<string, unknown>) {
-  const value = typeof payload.aspect_ratio === "string" ? payload.aspect_ratio : typeof payload.ratio === "string" ? payload.ratio : "";
-  return ["16:9", "9:16", "3:4", "4:3", "1:1"].includes(value) ? value : "1:1";
-}
-
-function normalizeNewtokenGptImage2Attempt(attempt: ImageJobAttempt): ImageJobAttempt {
-  const input = attempt.payload;
-  const images = [
-    ...(Array.isArray(input.images) ? input.images : []),
-    ...(Array.isArray(input.reference_images) ? input.reference_images : []),
-    ...(Array.isArray(input.referenceImages) ? input.referenceImages : []),
-  ].filter((value): value is string => typeof value === "string" && Boolean(value));
-  const payload: Record<string, unknown> = {
-    model: input.model,
-    prompt: input.prompt,
-    aspect_ratio: normalizeNewtokenGptImage2AspectRatio(input),
-  };
-  if (images.length) payload.images = Array.from(new Set(images));
-  return {
-    ...attempt,
-    label: "newtoken gpt-image2 async",
-    endpoint: "/v1/videos",
-    payload,
-    referenceImages: undefined,
-    useImageEdit: false,
-    mediaType: "image",
-  };
-}
-
-function normalizeNewtokenGptImage2JobRequest(
-  provider: Record<string, unknown> | undefined,
-  endpoint: string,
-  payload: Record<string, unknown> | undefined,
-  attempts: ImageJobAttempt[] | undefined,
-) {
-  if (!isNewtokenAsyncGptImage2Request(provider, payload)) return { endpoint, payload, attempts };
-
-  const baseAttempt: ImageJobAttempt = {
-    label: "newtoken gpt-image2 async",
-    endpoint,
-    payload: payload!,
-    mediaType: "image",
-  };
-  const normalized = normalizeNewtokenGptImage2Attempt(baseAttempt);
-  return {
-    endpoint: normalized.endpoint,
-    payload: normalized.payload,
-    attempts: [normalized],
-  };
-}
-
 function summarizeVideoPayload(payload?: Record<string, unknown>) {
   if (!payload) return undefined;
   const images = Array.isArray(payload.images) ? payload.images : undefined;
@@ -4149,13 +4084,28 @@ function toImageDataUrl(base64: string) {
   return `data:image/png;base64,${base64.replace(/\s+/g, "")}`;
 }
 
+function isUsableImageUrl(value: string) {
+  const cleaned = value.trim();
+  return /^data:image\//i.test(cleaned) || /^https?:\/\//i.test(cleaned) || cleaned.startsWith("/");
+}
+
 function extractImageUrls(response: unknown): string[] {
   const results: string[] = [];
+  const pushImage = (candidate: string) => {
+    const cleaned = candidate.trim().replace(/[),.;\]]+$/g, "");
+    if (!cleaned) return;
+    if (isUsableImageUrl(cleaned)) {
+      results.push(cleaned);
+      return;
+    }
+    if (isLikelyBase64Image(cleaned)) results.push(toImageDataUrl(cleaned));
+  };
+
   const visit = (value: unknown) => {
     if (!value) return;
     if (typeof value === "string") {
-      if (/^data:image\//i.test(value) || /^https?:\/\//i.test(value)) {
-        results.push(value);
+      if (isUsableImageUrl(value)) {
+        pushImage(value);
         return;
       }
       if (isLikelyBase64Image(value)) {
@@ -4174,7 +4124,7 @@ function extractImageUrls(response: unknown): string[] {
     for (const key of ["url", "image_url", "output_url", "result_url"] as const) {
       const candidate = item[key];
       if (typeof candidate === "string") {
-        results.push(candidate);
+        pushImage(candidate);
         // Debug log to track URL extraction
         if (candidate.includes('/content/')) {
           console.log('[extractImageUrls] Found content URL:', {
@@ -4253,6 +4203,33 @@ function extractMediaUrls(response: unknown, mediaType: MediaJobType) {
   return mediaType === "video" ? extractVideoUrls(response) : extractImageUrls(response);
 }
 
+function getAsyncTaskFailureReason(response: unknown): string | null {
+  if (!response || typeof response !== "object") return null;
+  const candidates = [
+    getNestedValue(response, ["fail_reason"]),
+    getNestedValue(response, ["error"]),
+    getNestedValue(response, ["message"]),
+    getNestedValue(response, ["detail", "fail_reason"]),
+    getNestedValue(response, ["detail", "error"]),
+    getNestedValue(response, ["detail", "message"]),
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+    if (candidate && typeof candidate === "object") {
+      const message = (candidate as Record<string, unknown>).message;
+      if (typeof message === "string" && message.trim()) return message.trim();
+    }
+  }
+  return null;
+}
+
+class AsyncTaskFailureError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AsyncTaskFailureError";
+  }
+}
+
 function absolutizeUpstreamMediaUrl(mediaUrl: string, baseUrl: string) {
  if (/^(?:https?:|data:(?:image|video)\/)/i.test(mediaUrl)) return mediaUrl;
  if (!mediaUrl.startsWith("/")) return mediaUrl;
@@ -4273,17 +4250,10 @@ function extractAsyncTaskId(response: unknown): string | null {
  if (!response || typeof response !== "object") return null;
  const obj = response as Record<string, unknown>;
  
- // Check for common async task patterns
- // Only treat as async if status is explicitly queued/processing
- if ((obj.status === "queued" || obj.status === "processing") && typeof obj.task_id === "string" && obj.task_id) {
- return obj.task_id;
- }
- if ((obj.status === "queued" || obj.status === "processing") && typeof obj.taskId === "string" && obj.taskId) {
- return obj.taskId;
- }
- if ((obj.status === "queued" || obj.status === "processing") && typeof obj.id === "string" && obj.id) {
- return obj.id;
- }
+ // Check for common async task patterns. Unified async image APIs often return
+ // { id, status: "pending" } instead of task_id.
+ const status = obj.status ?? obj.state;
+ if (isActiveTaskStatus(status)) return extractTaskIdCandidate(response);
  
  return null;
 }
@@ -4430,8 +4400,10 @@ async function pollAsyncTask(job: ImageJob, attempt: ImageJobAttempt, taskId: st
  };
  
  // 异步图片任务若走 /videos 端点（如 newtoken GPT Image 2），任务状态同样查 /v1/videos/{id}。
- const usesVideoEndpoint = (attempt.endpoint ?? "").toLowerCase().includes("/videos");
- const taskEndpoints = mediaType === "video" || usesVideoEndpoint ? buildVideoTaskStatusEndpoints(taskId, attempt.endpoint) : [
+ const attemptEndpoint = (attempt.endpoint ?? "").toLowerCase();
+ const usesVideoEndpoint = attemptEndpoint.includes("/videos");
+ const usesAsyncGenerationsEndpoint = attemptEndpoint.includes("async/generations");
+ const taskEndpoints = mediaType === "video" || usesVideoEndpoint || usesAsyncGenerationsEndpoint ? buildVideoTaskStatusEndpoints(taskId, attempt.endpoint) : [
  `/v1/images/tasks/${taskId}`, // New API standard endpoint (documented)
  `/images/tasks/${taskId}`, // New API without /v1
  `/v1/tasks/${taskId}`, // Generic tasks endpoint
@@ -4500,6 +4472,11 @@ async function pollAsyncTask(job: ImageJob, attempt: ImageJobAttempt, taskId: st
  }
  
  const obj = taskResponse as Record<string, unknown>;
+
+ const failureReason = getAsyncTaskFailureReason(taskResponse);
+ if (failureReason) {
+ throw new AsyncTaskFailureError(`${attempt.label ?? attempt.endpoint}: async task failed: ${failureReason}`);
+ }
  
  // Check if task is completed
  if (obj.status === "completed" || obj.status === "succeeded" || obj.status === "success") {
@@ -4522,14 +4499,14 @@ async function pollAsyncTask(job: ImageJob, attempt: ImageJobAttempt, taskId: st
   pollAttempt: i + 1,
   hint: `Found ${mediaType} URL without completed status`,
   responsePreview: sanitizeText(responseText, 500)
-  });
+ });
  return taskResponse;
  }
  
  // Check if task failed
  if (obj.status === "failed" || obj.status === "error") {
- const errorMsg = typeof obj.error === "string" ? obj.error : typeof obj.message === "string" ? obj.message : "Task failed";
- throw new Error(`${attempt.label ?? attempt.endpoint}: async task failed: ${errorMsg}`);
+ const errorMsg = getAsyncTaskFailureReason(taskResponse) ?? "Task failed";
+ throw new AsyncTaskFailureError(`${attempt.label ?? attempt.endpoint}: async task failed: ${errorMsg}`);
  }
  
  // Task still processing - only continue if not last attempt
@@ -4599,6 +4576,11 @@ async function pollAsyncTask(job: ImageJob, attempt: ImageJobAttempt, taskId: st
  endpoint: taskPath
  });
  }
+
+  const failureReason = getAsyncTaskFailureReason(taskResponse);
+  if (failureReason) {
+  throw new AsyncTaskFailureError(`${attempt.label ?? attempt.endpoint}: async task failed: ${failureReason}`);
+  }
  
   const taskMediaUrls = extractMediaUrls(taskResponse, mediaType);
   if (taskMediaUrls.length > 0) {
@@ -4632,8 +4614,8 @@ async function pollAsyncTask(job: ImageJob, attempt: ImageJobAttempt, taskId: st
  
  // Check if task failed
  if (obj.status === "failed" || obj.status === "error") {
- const errorMsg = typeof obj.error === "string" ? obj.error : typeof obj.message === "string" ? obj.message : "Task failed";
- throw new Error(`${attempt.label ?? attempt.endpoint}: async task failed: ${errorMsg}`);
+ const errorMsg = getAsyncTaskFailureReason(taskResponse) ?? "Task failed";
+ throw new AsyncTaskFailureError(`${attempt.label ?? attempt.endpoint}: async task failed: ${errorMsg}`);
  }
  
  // Task still processing
@@ -4647,6 +4629,9 @@ async function pollAsyncTask(job: ImageJob, attempt: ImageJobAttempt, taskId: st
  });
  break; // Break inner loop, continue polling
  } catch (error) {
+ if (error instanceof AsyncTaskFailureError) {
+ throw error;
+ }
  if (workingEndpoint) {
  logImageJob(job.id, "attempt.poll-working-endpoint-error", {
  label: attempt.label,
@@ -6293,6 +6278,36 @@ function getPromptFromPayload(payload: Record<string, unknown>) {
   return undefined;
 }
 
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function getImageJobRequestSignature(input: {
+  providerBaseUrl: string;
+  endpoint: string;
+  payload: Record<string, unknown>;
+  mediaType: MediaJobType;
+  attempts?: ImageJobAttempt[];
+}) {
+  return stableJson({
+    providerBaseUrl: normalizeBaseUrl(input.providerBaseUrl),
+    endpoint: input.endpoint,
+    mediaType: input.mediaType,
+    payload: input.payload,
+    attempts: input.attempts?.map((attempt) => ({
+      endpoint: attempt.endpoint,
+      mediaType: attempt.mediaType,
+      payload: attempt.payload,
+      useImageEdit: attempt.useImageEdit === true,
+    })),
+  });
+}
+
 function getFirstPayloadValue(job: ImageJob, key: string) {
   const payloads = [job.request.payload, ...getImageJobAttempts(job).map((attempt) => attempt.payload)];
   for (const payload of payloads) {
@@ -7097,7 +7112,7 @@ app.post("/api/image-jobs", upload.none(), (request, response) => {
   const body = request.body as Record<string, unknown>;
   const provider = body.provider as Record<string, unknown> | undefined;
   const rawPayload = body.payload as Record<string, unknown> | undefined;
-  const rawEndpoint = typeof body.endpoint === "string" ? body.endpoint : "/images/generations";
+  const rawEndpoint = typeof body.endpoint === "string" ? body.endpoint : "";
   const mediaType: MediaJobType = body.mediaType === "video" ? "video" : "image";
   const rawNormalizedPayload = rawPayload ? normalizeVideoPayloadImageFields(rawPayload, mediaType) : undefined;
   const rawAttempts = Array.isArray(body.attempts)
@@ -7118,10 +7133,9 @@ app.post("/api/image-jobs", upload.none(), (request, response) => {
         })
         .filter((attempt): attempt is ImageJobAttempt => Boolean(attempt))
     : undefined;
-  const normalizedRequest = normalizeNewtokenGptImage2JobRequest(provider, rawEndpoint, rawNormalizedPayload, rawAttempts);
-  const endpoint = normalizedRequest.endpoint;
-  const payload = normalizedRequest.payload;
-  const attempts = normalizedRequest.attempts;
+  const endpoint = rawEndpoint;
+  const payload = rawNormalizedPayload;
+  const attempts = rawAttempts;
   const clientTaskId = typeof body.clientTaskId === "string" && body.clientTaskId.trim() ? body.clientTaskId.trim() : undefined;
 
   logImageJob(clientTaskId ?? "job-request", "request.received", {
@@ -7133,6 +7147,7 @@ app.post("/api/image-jobs", upload.none(), (request, response) => {
     hasPayload: Boolean(payload),
     referenceImageCount: Array.isArray(body.referenceImages) ? body.referenceImages.length : 0,
     attemptCount: attempts?.length ?? 0,
+    attempts: attempts?.map((attempt) => ({ label: attempt.label, endpoint: attempt.endpoint, mediaType: attempt.mediaType })),
   });
   if (mediaType === "video") {
     logImageJob(clientTaskId ?? "job-request", "video.request.received", {
@@ -7148,28 +7163,46 @@ app.post("/api/image-jobs", upload.none(), (request, response) => {
 
   const providerBaseUrl = typeof provider?.baseUrl === "string" ? provider.baseUrl.trim() : "";
   const providerKey = typeof provider?.key === "string" ? provider.key.trim() : "";
-  if (!provider || !providerBaseUrl || !providerKey || !payload) {
+  if (!provider || !providerBaseUrl || !providerKey || !payload || !endpoint) {
     logImageJob(clientTaskId ?? "job-request", "request.invalid", {
       hasProvider: Boolean(provider),
       hasProviderBaseUrl: Boolean(providerBaseUrl),
       hasProviderKey: Boolean(providerKey),
       hasPayload: Boolean(payload),
+      hasEndpoint: Boolean(endpoint),
     });
-    response.status(400).json({ error: "provider.baseUrl, provider.key and payload are required" });
+    response.status(400).json({ error: "provider.baseUrl, provider.key, endpoint and payload are required" });
     return;
   }
 
+  const incomingSignature = getImageJobRequestSignature({ providerBaseUrl, endpoint, payload, mediaType, attempts });
   if (clientTaskId && jobs.has(clientTaskId)) {
     const existingJob = jobs.get(clientTaskId)!;
     markImageJobTimedOutIfStale(clientTaskId, existingJob);
-    logImageJob(clientTaskId, "job.reuse-existing", { status: jobs.get(clientTaskId)?.status });
-    response.status(202).json(getJobResponse(jobs.get(clientTaskId)!));
-    return;
+    const existingSignature = getImageJobRequestSignature({
+      providerBaseUrl: existingJob.provider.baseUrl,
+      endpoint: existingJob.request.endpoint,
+      payload: existingJob.request.payload,
+      mediaType: getJobMediaType(existingJob),
+      attempts: getImageJobAttempts(existingJob),
+    });
+    if (existingSignature === incomingSignature) {
+      logImageJob(clientTaskId, "job.reuse-existing", { status: jobs.get(clientTaskId)?.status });
+      response.status(202).json(getJobResponse(jobs.get(clientTaskId)!));
+      return;
+    }
+    logImageJob(clientTaskId, "job.reuse-skipped", {
+      status: existingJob.status,
+      existingEndpoint: existingJob.request.endpoint,
+      incomingEndpoint: endpoint,
+      existingAttempts: getImageJobAttempts(existingJob).map((attempt) => attempt.endpoint),
+      incomingAttempts: attempts?.map((attempt) => attempt.endpoint),
+    });
   }
 
   const now = Date.now();
   const job: ImageJob = {
-    id: clientTaskId ?? createId("job"),
+    id: clientTaskId && !jobs.has(clientTaskId) ? clientTaskId : createId("job"),
     status: "queued",
     createdAt: now,
     updatedAt: now,

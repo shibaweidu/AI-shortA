@@ -52,9 +52,9 @@ export function LocalAssetImage({ itemId, src, alt, className, loading }: LocalA
     };
   }, [itemId, src]);
 
-  const localImageUrl = !failedLocal && localUrl ? localUrl : undefined;
   const remoteImageUrl = localReady ? getDisplayAssetUrl(src) : undefined;
-  const displaySrc = localImageUrl ?? (!failedRemote ? remoteImageUrl : undefined);
+  const localImageUrl = !failedLocal && localUrl ? localUrl : undefined;
+  const displaySrc = (!failedRemote ? remoteImageUrl : undefined) ?? localImageUrl;
 
   if (!displaySrc) {
     return <div role="img" aria-label={alt} className={cn("bg-white/[0.03]", className)} />;
@@ -67,11 +67,8 @@ export function LocalAssetImage({ itemId, src, alt, className, loading }: LocalA
       className={className}
       loading={loading}
       onError={() => {
-        if (displaySrc === localUrl && !failedLocal) {
-          setFailedLocal(true);
-          return;
-        }
-        setFailedRemote(true);
+        if (displaySrc === remoteImageUrl && !failedRemote) setFailedRemote(true);
+        if (displaySrc === localUrl && !failedLocal) setFailedLocal(true);
       }}
     />
   );
