@@ -194,7 +194,7 @@ function isGptImageModel(model: ProviderModel) {
 }
 
 // newtoken 的 GPT Image 2：模型名含 gpt-image2（其专有命名）。同步/异步按模型配置的端点区分。
-function isNewtokenGptImage2Model(model: ProviderModel) {
+function isGptImage2Model(model: ProviderModel) {
   return /gpt-?image-?2/i.test(`${model.id} ${model.name}`);
 }
 
@@ -325,9 +325,6 @@ function getModelApiEndpoints(provider: ProviderConfig, model: ProviderModel, ty
   if (type === "image" && (isMaomiNewApiProvider(provider) || isMaomiNewApiImageModel(model))) return ["/chat/completions"];
   // newtoken GPT Image 2：强制按模型名定端点，避免历史配置残留导致异步模型误走同步接口。
   // 不带 _sync → 异步 /v1/videos；带 _sync → 同步 /images/generations。
-  if (type === "image" && isNewtokenGptImage2Model(model)) {
-    return `${model.id} ${model.name}`.toLowerCase().includes("_sync") ? ["/images/generations"] : ["/v1/videos"];
-  }
   if (type === "video" && (isMaomiNewApiProvider(provider) || isMaomiNewApiVideoModel(model))) return ["/chat/completions"];
   if (type === "video" && isZexiProvider(provider) && isZexiSeedanceModel(model)) return ["/videos"];
   const configured = getEnabledModelApiEndpoints(model, type);
@@ -1507,11 +1504,17 @@ requestPrompt = buildStyleReferenceInstruction({
   // newtoken GPT Image 2：以模型名识别（gpt-image2 是其专有命名，比域名可靠）。
   // 同步/异步按模型配置的端点区分：含 /v1/videos → 异步；否则按 /images/generations 同步处理。
   // 在通用 gpt-image 分支之前处理（gpt-image2 也会命中 isGptImageModel）。
-  if (isNewtokenGptImage2Model(model)) {
-    const configuredEndpoints = getModelApiEndpoints(provider, model, "image");
-    const isAsync = configuredEndpoints.includes("/v1/videos");
+  const configuredImageEndpoints = getModelApiEndpoints(provider, model, "image");
+  const useNewtokenAsyncImage = isGptImage2Model(model) && configuredImageEndpoints.includes("/v1/videos");
+  const useNewtokenSyncImage =
+    isGptImage2Model(model) &&
+    configuredImageEndpoints.length === 1 &&
+    configuredImageEndpoints[0] === "/images/generations" &&
+    `${model.id} ${model.name}`.toLowerCase().includes("_sync");
+
+  if (useNewtokenAsyncImage || useNewtokenSyncImage) {
     const refImages = normalizedReferenceImages.length > 0 ? normalizedReferenceImages : undefined;
-    const newtokenAttempt = isAsync
+    const newtokenAttempt = useNewtokenAsyncImage
       ? {
           label: "newtoken gpt-image2 async",
           endpoint: "/v1/videos" as const,
@@ -1592,7 +1595,7 @@ requestPrompt = buildStyleReferenceInstruction({
     referenceImages: undefined,
     useImageEdit: false,
   };
-  const routeEndpoints = getModelApiEndpoints(provider, model, "image");
+  const routeEndpoints = configuredImageEndpoints;
   const routeAttempts = routeEndpoints.flatMap((endpoint) => {
     if (endpoint === "/chat/completions") return [{ ...chatAttempt }];
     if (endpoint === "/responses") {

@@ -15,6 +15,43 @@ function readBlobAsDataUrl(blob: Blob) {
   });
 }
 
+export function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+        return;
+      }
+      reject(new Error("Failed to read reference image"));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read reference image"));
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function readReferenceImageAsPngDataUrl(file: File) {
+  const dataUrl = await readFileAsDataUrl(file);
+  const image = new Image();
+  const loaded = new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = () => reject(new Error("Failed to decode reference image"));
+  });
+  image.src = dataUrl;
+  await loaded;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Failed to prepare reference image");
+
+  context.fillStyle = "#fff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(image, 0, 0);
+  return canvas.toDataURL("image/png");
+}
+
 function detectImageMimeFromBase64(base64: string) {
   const normalized = base64.replace(/\s+/g, "");
   if (normalized.startsWith("iVBORw0KGgo")) return "image/png";

@@ -656,10 +656,10 @@ export default function Settings({
           ) : null}
 
           {selectedProvider ? (
-          <div className="grid min-h-[620px] gap-4 lg:grid-cols-[300px_1fr]">
-            <aside className="rounded-[24px] border border-white/[0.08] bg-[#11141b] p-3">
-              <div className="mb-3 px-2 text-xs uppercase tracking-[0.18em] text-[#687183]">供应商列表</div>
-              <div className="space-y-2">
+          <div className="grid min-h-[620px] items-start gap-4 lg:grid-cols-[300px_1fr]">
+            <aside className="flex max-h-[min(680px,calc(100vh-190px))] min-h-0 flex-col rounded-[24px] border border-white/[0.08] bg-[#11141b] p-3 lg:sticky lg:top-24">
+              <div className="mb-3 shrink-0 px-2 text-xs uppercase tracking-[0.18em] text-[#687183]">供应商列表</div>
+              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
                 {customProviders.map((provider) => {
                   const totalFlowModels = FLOW_MODEL_TYPES.reduce((sum, type) => sum + provider.models[type].length, 0);
                   const selected = provider.id === selectedProvider.id;

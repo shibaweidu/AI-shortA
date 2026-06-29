@@ -30,6 +30,7 @@ import { useAgentStore } from "../../store/agentStore";
 import { useCreditStore } from "../../store/creditStore";
 import { useAuthStore } from "../../store/authStore";
 import { getModelCreditCost, useModelCreditStore } from "../../store/modelCreditStore";
+import { useAgentApplyPrompt } from "../../hooks/useAgentApplyPrompt";
 
 function downloadAsset(url: string, id: string) {
   const link = document.createElement("a");
@@ -229,6 +230,12 @@ export default function FlowWorkspace() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useAgentApplyPrompt((nextPrompt) => {
+    setPrompt(nextPrompt);
+    setOpenGeneratorPanel(null);
+    generatorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
 
   useEffect(() => {
     const shouldRecoverMissingJobError =

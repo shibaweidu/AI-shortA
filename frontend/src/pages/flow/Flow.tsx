@@ -48,6 +48,7 @@ import { useCreditStore } from "../../store/creditStore";
 import { useAuthStore } from "../../store/authStore";
 import { getModelCreditCost, useModelCreditStore } from "../../store/modelCreditStore";
 import { useAgentStore } from "../../store/agentStore";
+import { useAgentApplyPrompt } from "../../hooks/useAgentApplyPrompt";
 
 type ViewMode = "grid" | "batch";
 type FilterBy = "all" | "image" | "video";
@@ -459,19 +460,11 @@ export default function Flow() {
     };
   }, [currentProject, hasHydrated, projectItems, saveDirectoryHandle, updateItem]);
 
-  // Listen for agent prompt apply events
-  useEffect(() => {
-    const handleAgentApplyPrompt = (event: CustomEvent<{ prompt: string }>) => {
-      setPrompt(event.detail.prompt);
-      // Optionally close the agent sidebar
-      // useAgentStore.getState().closeSidebar();
-    };
-
-    window.addEventListener('agent-apply-prompt', handleAgentApplyPrompt as EventListener);
-    return () => {
-      window.removeEventListener('agent-apply-prompt', handleAgentApplyPrompt as EventListener);
-    };
-  }, []);
+  useAgentApplyPrompt((nextPrompt) => {
+    setPrompt(nextPrompt);
+    setOpenGeneratorPanel(null);
+    generatorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
 
   const handlePickSaveDirectory = async () => {
     if (!localFolderSupported) {

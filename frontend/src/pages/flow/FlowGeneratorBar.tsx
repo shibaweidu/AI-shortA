@@ -16,7 +16,7 @@ import { Check, ChevronDown, Image as ImageIcon, Loader2, Palette, Pencil, Trash
 import { LocalAssetImage } from "../../components/LocalAssetImage";
 import { cn, getDisplayAssetUrl } from "../../lib/utils";
 import { getDataUrlFromPersistedAssetFile } from "../../services/localFiles";
-import { resolveReferenceImageDataUrl } from "../../services/referenceImages";
+import { readReferenceImageAsPngDataUrl, resolveReferenceImageDataUrl } from "../../services/referenceImages";
 import { createCustomStylePreset, deleteCustomStylePreset, fetchStyleLibrary, updateCustomStylePreset, uploadStyleImage, type StyleCategory, type StylePreset } from "../../services/styleLibrary";
 import type { GeneratorOption } from "../../lib/generatorOptions";
 import type { FlowItem, FlowItemType, FlowProject, FlowReferenceRole } from "../../store/flowStore";
@@ -115,43 +115,6 @@ function makeStyleNameFromDate(date = new Date()) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `风格${year}${month}${day}`;
-}
-
-function readFileAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === "string") {
-        resolve(reader.result);
-        return;
-      }
-      reject(new Error("Failed to read reference image"));
-    };
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read reference image"));
-    reader.readAsDataURL(file);
-  });
-}
-
-async function readReferenceImageAsPngDataUrl(file: File) {
-  const dataUrl = await readFileAsDataUrl(file);
-  const image = new Image();
-  const loaded = new Promise<void>((resolve, reject) => {
-    image.onload = () => resolve();
-    image.onerror = () => reject(new Error("Failed to decode reference image"));
-  });
-  image.src = dataUrl;
-  await loaded;
-
-  const canvas = document.createElement("canvas");
-  canvas.width = image.naturalWidth;
-  canvas.height = image.naturalHeight;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Failed to prepare reference image");
-
-  context.fillStyle = "#fff";
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.drawImage(image, 0, 0);
-  return canvas.toDataURL("image/png");
 }
 
 interface FlowGeneratorBarProps {
@@ -1723,7 +1686,7 @@ export function FlowGeneratorBar({
                           className={cn(
                             "group grid min-h-[102px] grid-cols-[64px_minmax(0,1fr)] gap-3 rounded-[12px] border border-[rgba(255,255,255,0.08)] px-[10px] py-3 text-left transition-all",
                             selected
-                              ? "border-sky-300/35 bg-sky-300/16 shadow-[0_0_0_1px_rgba(125,211,252,0.12)]"
+                              ? "border-sky-300/70 bg-blue-600/35 shadow-[0_0_0_1px_rgba(125,211,252,0.22)]"
                               : "hover:bg-[rgba(255,255,255,0.05)] active:border-[#217EFD]"
                           )}
                         >

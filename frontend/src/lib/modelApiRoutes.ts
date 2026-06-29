@@ -88,7 +88,7 @@ export function getDefaultModelApiRoutes(input: {
   if (input.type === "language") return uniqEndpoints(["/chat/completions"], input.type);
 
   if (input.type === "image") {
-    if (isNewtokenGptImage2ModelText(modelText)) {
+    if (isNewtokenProviderText(providerText) && isNewtokenGptImage2ModelText(modelText)) {
       // _sync 后缀走同步图片接口，否则走异步 /v1/videos（图片任务也走这个）。
       return modelText.includes("_sync")
         ? uniqEndpoints(["/images/generations"], input.type)

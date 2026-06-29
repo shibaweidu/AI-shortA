@@ -5,11 +5,9 @@ import type { Agent, AgentConversation, AgentMessage } from '../types/agent';
 const MAX_PERSISTED_CONVERSATIONS = 24;
 const MAX_PERSISTED_MESSAGES_PER_CONVERSATION = 40;
 const MAX_PERSISTED_MESSAGE_CHARS = 20_000;
-const MAX_PERSISTED_MEMORY_CHARS = 12_000;
-
 type PersistedAgentState = Pick<
   AgentStore,
-  'conversations' | 'selectedAgentId' | 'currentConversationId' | 'isSidebarOpen' | 'memories'
+  'conversations' | 'selectedAgentId' | 'currentConversationId' | 'isSidebarOpen'
 >;
 
 function compactMessageForStorage(message: AgentMessage): AgentMessage {
@@ -34,15 +32,6 @@ function compactConversationsForStorage(conversations: AgentConversation[]) {
     }));
 }
 
-function compactMemoriesForStorage(memories: Record<string, string>) {
-  return Object.fromEntries(
-    Object.entries(memories).map(([agentId, memory]) => [
-      agentId,
-      memory.length > MAX_PERSISTED_MEMORY_CHARS ? memory.slice(0, MAX_PERSISTED_MEMORY_CHARS) : memory,
-    ])
-  );
-}
-
 interface AgentStore {
   // Agent列表
   agents: Agent[];
@@ -58,7 +47,6 @@ interface AgentStore {
   
   // 侧边栏是否打开
   isSidebarOpen: boolean;
-  memories: Record<string, string>;
   
   // Actions
   setAgents: (agents: Agent[]) => void;
@@ -77,7 +65,6 @@ interface AgentStore {
   updateMessage: (conversationId: string, messageId: string, updates: Partial<Pick<AgentMessage, 'content' | 'attachments'>>) => void;
   clearConversation: (conversationId: string) => void;
   deleteConversation: (conversationId: string) => void;
-  updateMemory: (agentId: string, memory: string) => void;
   
   toggleSidebar: () => void;
   openSidebar: (agentId?: string) => void;
@@ -92,7 +79,6 @@ export const useAgentStore = create<AgentStore>()(
       selectedAgentId: null,
       currentConversationId: null,
       isSidebarOpen: false,
-      memories: {},
 
       setAgents: (agents) => set({ agents }),
 
@@ -238,11 +224,6 @@ export const useAgentStore = create<AgentStore>()(
         });
       },
 
-      updateMemory: (agentId, memory) =>
-        set((state) => ({
-          memories: { ...state.memories, [agentId]: memory },
-        })),
-
       toggleSidebar: () => set((state) => ({ isSidebarOpen: !state.isSidebarOpen })),
 
       openSidebar: (agentId) => {
@@ -262,7 +243,6 @@ export const useAgentStore = create<AgentStore>()(
         selectedAgentId: state.selectedAgentId,
         currentConversationId: state.currentConversationId,
         isSidebarOpen: state.isSidebarOpen,
-        memories: compactMemoriesForStorage(state.memories),
       }),
     }
   )

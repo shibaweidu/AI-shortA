@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
-import { AtSign, Check, CheckCircle2, ChevronDown, Copy, Loader2, MessageSquarePlus, Plus, Save, Search, Send, Trash2, Upload, Wand2, X } from 'lucide-react';
+import { Check, CheckCircle2, ChevronDown, Copy, Loader2, MessageSquarePlus, Plus, Search, Send, Trash2, Upload, Wand2, X } from 'lucide-react';
 import { useAgentStore } from '../../store/agentStore';
 import { useFlowStore } from '../../store/flowStore';
-import { streamAgentMessage, uploadImageFiles } from '../../services/agent';
+import { streamAgentMessage } from '../../services/agent';
 import { useSettingsStore } from '../../store/settingsStore';
 import { useUserModelStore } from '../../store/userModelStore';
 import { useAuthStore } from '../../store/authStore';
@@ -13,7 +13,7 @@ import { buildModelCatalogOptions, getPreferredModelValue } from '../../lib/mode
 import { parseSourcedProviderModelValue } from '../../lib/providerModels';
 import { withSelectedProviderKey } from '../../lib/providerKeys';
 import { getDataUrlFromPersistedAssetFile } from '../../services/localFiles';
-import { resolveReferenceImageDataUrl } from '../../services/referenceImages';
+import { readReferenceImageAsPngDataUrl, resolveReferenceImageDataUrl } from '../../services/referenceImages';
 import { Textarea } from '../ui/textarea';
 import { cn, getDisplayAssetUrl } from '../../lib/utils';
 import type { AgentAttachment } from '../../types/agent';
@@ -118,8 +118,6 @@ export function AgentChat() {
     createAndSelectConversation,
     selectConversation,
     deleteConversation,
-    memories,
-    updateMemory,
   } = useAgentStore();
   const { providers, routing } = useSettingsStore();
   const { providers: userProviders, routing: userRouting } = useUserModelStore();
@@ -149,9 +147,6 @@ export function AgentChat() {
   const agentConversations = conversations
     .filter((item) => item.agentId === selectedAgentId)
     .sort((a, b) => b.updatedAt - a.updatedAt);
-  const memory = selectedAgentId ? memories[selectedAgentId] ?? '' : '';
-  const [memoryDraft, setMemoryDraft] = useState(memory);
-  const [memoryOpen, setMemoryOpen] = useState(false);
   const modelOptions = useMemo(
     () => [
       ...buildGeneratorModelOptions(buildModelCatalogOptions(providers, routing, 'language', 'koala')),
@@ -163,6 +158,8 @@ export function AgentChat() {
   const selectedModelValue = selectedModel || selectedModelOption?.value || '';
   const selectedParsedModel = selectedModelValue ? parseSourcedProviderModelValue(selectedModelValue) : null;
   const isCustomModel = selectedParsedModel?.source === 'custom';
+  const koalaModelOptions = modelOptions.filter((option) => option.source !== 'custom');
+  const customModelOptions = modelOptions.filter((option) => option.source === 'custom');
   const estimatedCredits = selectedModelValue
     ? getModelCreditCost({ rules: modelCreditRules, modelValue: selectedModelValue, type: 'text' })
     : 0;
@@ -189,10 +186,6 @@ export function AgentChat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversation?.messages]);
-
-  useEffect(() => {
-    setMemoryDraft(memory);
-  }, [memory]);
 
   useEffect(() => {
     return () => {
@@ -284,7 +277,6 @@ export function AgentChat() {
         content: message.content,
       }));
 
-      const memoryPrompt = memory.trim() ? `\n\n[智能体长期记忆]\n${memory.trim()}` : '';
       assistantMessageId = addMessage(conversation.id, {
         agentId: agent.id,
         role: 'assistant',
@@ -294,7 +286,7 @@ export function AgentChat() {
 
       const response = await streamAgentMessage(
         agent.id,
-        `${userMessage}${memoryPrompt}`,
+        userMessage,
         conversationHistory,
         {
           baseUrl: requestProvider.baseUrl,
@@ -387,6 +379,7 @@ export function AgentChat() {
         },
       ];
     });
+    setOpenPanel(null);
   };
 
   const handleRemoveAttachment = (id: string) => {
@@ -400,17 +393,17 @@ export function AgentChat() {
 
     try {
       setIsUploadingAttachment(true);
-      const uploadedFiles = await uploadImageFiles(files);
       const uploadedAttachments = await Promise.all(
-        uploadedFiles.map(async (file) => ({
+        files.map(async (file) => ({
           id: createAttachmentId(),
           type: 'image' as const,
-          url: await resolveReferenceImageDataUrl(file.url),
+          url: await readReferenceImageAsPngDataUrl(file),
           name: file.name,
           size: file.size,
         }))
       );
       setAttachments((current) => [...current, ...uploadedAttachments]);
+      setOpenPanel(null);
     } catch (error) {
       addMessage(conversation.id, {
         agentId: agent.id,
@@ -466,34 +459,6 @@ export function AgentChat() {
             >
               <Trash2 className="h-3.5 w-3.5" />
             </button>
-          ) : null}
-        </div>
-        <div className="mt-2 rounded-xl border border-white/[0.06] bg-white/[0.03]">
-          <button
-            onClick={() => setMemoryOpen((current) => !current)}
-            className="flex w-full items-center justify-between px-3 py-2 text-left text-xs text-[#cfd7e6]"
-          >
-            <span>记忆 {memory.trim() ? '已启用' : '未设置'}</span>
-            <ChevronDown className={cn('h-3.5 w-3.5 text-[#687183] transition', memoryOpen && 'rotate-180')} />
-          </button>
-          {memoryOpen ? (
-            <div className="border-t border-white/[0.06] p-3">
-              <textarea
-                value={memoryDraft}
-                onChange={(event) => setMemoryDraft(event.target.value)}
-                className="min-h-[86px] w-full resize-y rounded-xl border border-white/[0.08] bg-black/20 px-3 py-2 text-xs leading-5 text-white outline-none placeholder:text-[#667085]"
-                placeholder="记录这个智能体需要长期记住的偏好、品牌风格、输出要求..."
-              />
-              <div className="mt-2 flex justify-end">
-                <button
-                  onClick={() => updateMemory(agent.id, memoryDraft)}
-                  className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-cyan-400 px-3 text-xs font-medium text-black hover:bg-cyan-300"
-                >
-                  <Save className="h-3.5 w-3.5" />
-                  保存记忆
-                </button>
-              </div>
-            </div>
           ) : null}
         </div>
       </div>
@@ -602,32 +567,20 @@ export function AgentChat() {
           <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto border-t border-white/[0.045] px-3 pb-3 pt-2.5 [scrollbar-width:none] sm:flex-wrap sm:px-4 [&::-webkit-scrollbar]:hidden">
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => setOpenPanel(openPanel === 'assets' ? null : 'assets')}
               disabled={isUploadingAttachment}
-              className="inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] border border-white/8 bg-[#2a2d35] text-[18px] font-medium text-[#cfd6e2] transition hover:border-white/14 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-              title="上传文件"
+              className={cn(
+                'inline-flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] border border-white/8 bg-[#2a2d35] text-[18px] font-medium text-[#cfd6e2] transition hover:border-white/14 hover:text-white disabled:cursor-not-allowed disabled:opacity-60',
+                attachments.length > 0 && 'border-cyan-300/25 bg-cyan-300/10 text-cyan-100'
+              )}
+              title="添加图片"
             >
               {isUploadingAttachment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             </button>
             <input ref={fileInputRef} type="file" multiple accept="image/*" onChange={handleFileUpload} className="hidden" />
 
-            <div className="static shrink-0 md:relative">
-              <button
-                type="button"
-                onClick={() => setOpenPanel(openPanel === 'assets' ? null : 'assets')}
-                className={cn(
-                  'inline-flex h-[34px] shrink-0 items-center gap-2 whitespace-nowrap rounded-[10px] border border-white/8 bg-[#2a2d35] px-3 text-[13px] font-medium text-[#cfd6e2] transition hover:border-white/14 hover:text-white',
-                  attachments.length > 0 && 'border-cyan-300/25 bg-cyan-300/10 text-cyan-100'
-                )}
-                title="引用素材"
-              >
-                <AtSign className="h-4 w-4" />
-                <span className="hidden sm:inline">素材</span>
-                {attachments.length > 0 ? <span className="rounded-full bg-black/30 px-1.5 text-[10px]">{attachments.length}</span> : null}
-              </button>
-
               {openPanel === 'assets' ? (
-                <div className="fixed inset-x-3 bottom-[calc(176px+env(safe-area-inset-bottom))] z-40 flex max-h-[48dvh] overflow-hidden rounded-2xl border border-white/8 bg-[#1b1e25] shadow-[0_28px_60px_rgba(0,0,0,0.55)] md:absolute md:inset-x-auto md:bottom-[calc(100%+10px)] md:right-0 md:max-h-[70vh] md:w-[min(720px,calc(100vw-300px))]">
+                <div className="fixed inset-x-3 bottom-[calc(176px+env(safe-area-inset-bottom))] z-[90] flex max-h-[48dvh] overflow-hidden rounded-2xl border border-white/8 bg-[#1b1e25] shadow-[0_28px_60px_rgba(0,0,0,0.55)] md:left-auto md:right-6 md:w-[min(720px,calc(100vw-360px))] md:max-h-[70vh]">
                   <div className="flex min-h-0 w-full flex-col md:w-[420px] md:shrink-0">
                     <div className="grid grid-cols-2 gap-2 border-b border-white/[0.06] px-3 py-2 md:flex md:items-center">
                       <select
@@ -727,7 +680,6 @@ export function AgentChat() {
                   </div>
                 </div>
               ) : null}
-            </div>
 
             <div className="relative shrink-0">
               <button
@@ -745,62 +697,81 @@ export function AgentChat() {
               </button>
 
               {openPanel === 'model' ? (
-                <div className="fixed inset-x-3 bottom-[calc(176px+env(safe-area-inset-bottom))] z-30 max-h-[48dvh] overflow-hidden rounded-[14px] bg-[#1C1C1E] p-3 shadow-[0_24px_50px_rgba(0,0,0,0.45)] sm:absolute sm:inset-x-auto sm:bottom-[calc(100%+10px)] sm:right-0 sm:w-[min(420px,calc(100vw-40px))]">
-                  <div className="mb-3 text-sm font-medium text-[#ffffff90]">选择文本模型</div>
-                  <div className="max-h-[44dvh] space-y-2 overflow-y-auto pr-1 sm:max-h-[300px]">
-                    {modelOptions.length ? (
-                      modelOptions.map((option) => {
-                        const selected = option.value === selectedModel;
-                        return (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => {
-                              setSelectedModel(option.value);
-                              setOpenPanel(null);
-                            }}
-                            className={cn(
-                              'group flex w-full gap-3 rounded-[12px] border border-[rgba(255,255,255,0.08)] px-[10px] py-3 text-left transition-all',
-                              selected ? 'border-sky-300/35 bg-sky-300/16 shadow-[0_0_0_1px_rgba(125,211,252,0.12)]' : 'text-[#e4e9f1] hover:bg-[rgba(255,255,255,0.05)]'
-                            )}
-                          >
-                            <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center overflow-hidden rounded-[16px] bg-[#1B1B20]">
-                              {option.imageUrl ? (
-                                <img src={option.imageUrl} alt={option.label} className="h-10 w-10 rounded-[12px] object-contain" />
-                              ) : (
-                                <Wand2 className="h-7 w-7 text-white/70" />
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <div className="truncate text-[14px] font-medium text-white">{option.label}</div>
-                                {option.source ? (
-                                  <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium', option.source === 'custom' ? 'bg-violet-400/10 text-violet-200' : 'bg-cyan-400/10 text-cyan-200')}>
-                                    {option.source === 'custom' ? '自定义' : '考拉AI'}
-                                  </span>
-                                ) : null}
+                <div className="fixed inset-x-3 bottom-[calc(176px+env(safe-area-inset-bottom))] z-[95] max-h-[62dvh] overflow-hidden rounded-[16px] bg-[#1C1C1E] shadow-[0_24px_50px_rgba(0,0,0,0.45)] sm:left-auto sm:right-6 sm:w-[min(800px,calc(100vw-40px))] sm:rounded-[10px]">
+                  <div className="relative flex max-h-[62dvh] flex-col rounded-[10px] pb-3 sm:pb-5">
+                    <div className="sticky top-0 z-10 p-3 text-[16px] font-medium text-[#ffffff80] sm:p-5 sm:text-[18px]">选择文本模型</div>
+                    <div className="min-h-0 overflow-y-auto px-3 pb-1 sm:px-5">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                        {[
+                          { title: '考拉AI模型', options: koalaModelOptions },
+                          { title: '自定义模型', options: customModelOptions },
+                        ].map((group) => (
+                          <div key={group.title} className="col-span-full">
+                            <div className="mb-3 mt-1 text-xs font-medium uppercase tracking-[0.18em] text-[#7d8596]">{group.title}</div>
+                            {group.options.length ? (
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                                {group.options.map((option) => {
+                                  const selected = option.value === selectedModel;
+                                  return (
+                                    <button
+                                      key={option.value}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedModel(option.value);
+                                        setOpenPanel(null);
+                                      }}
+                                      className={cn(
+                                        'group relative grid min-h-[102px] grid-cols-[64px_minmax(0,1fr)] gap-3 rounded-[12px] border border-[rgba(255,255,255,0.08)] px-[10px] py-3 pr-8 text-left transition-all',
+                                        selected
+                                          ? 'border-sky-300/70 bg-blue-600/35 shadow-[0_0_0_1px_rgba(125,211,252,0.22)]'
+                                          : 'hover:bg-[rgba(255,255,255,0.05)] active:border-[#217EFD]'
+                                      )}
+                                    >
+                                      <div className="flex h-full min-h-[64px] w-[64px] shrink-0 items-center justify-center overflow-hidden rounded-[16px]">
+                                        {option.imageUrl ? (
+                                          <img
+                                            src={option.imageUrl}
+                                            alt={option.label}
+                                            className={cn('h-11 w-11 rounded-[12px] object-contain transition-all duration-300', selected ? 'scale-[1.08]' : 'group-hover:scale-[1.08]')}
+                                          />
+                                        ) : (
+                                          <Wand2 className="h-7 w-7 text-white/70" />
+                                        )}
+                                      </div>
+                                      <div className="flex min-w-0 flex-1 flex-col items-start gap-[6px]">
+                                        <div className="flex w-full min-w-0 items-center gap-2">
+                                          <div className="truncate text-[16px] font-medium text-white">{option.label}</div>
+                                          <div className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium', option.source === 'custom' ? 'bg-violet-400/10 text-violet-200' : 'bg-cyan-400/10 text-cyan-200')}>
+                                            {option.source === 'custom' ? '自定义' : '考拉AI'}
+                                          </div>
+                                        </div>
+                                        <div className="flex w-full min-w-0 flex-wrap items-center gap-[6px]">
+                                          <div className="truncate text-[12px] text-[#99A0AE]">{option.providerName}</div>
+                                          {option.labels?.map((label) => (
+                                            <div key={label} className="whitespace-nowrap rounded-full bg-white/10 px-2 py-0.5 text-[11px] font-medium text-white/70 group-hover:bg-white/20 group-hover:text-white">
+                                              {label}
+                                            </div>
+                                          ))}
+                                        </div>
+                                        {option.description ? <div className="line-clamp-2 w-full text-[12px] leading-5 text-[#b2bac8]">{option.description}</div> : null}
+                                      </div>
+                                      {selected ? <CheckCircle2 className="absolute right-3 top-3 h-4 w-4 text-white" /> : null}
+                                    </button>
+                                  );
+                                })}
                               </div>
-                              <div className="mt-1 truncate text-xs text-[#99A0AE]">{option.providerName}</div>
-                              {option.description ? <div className="mt-1 line-clamp-2 text-xs leading-4 text-[#b2bac8]">{option.description}</div> : null}
-                              {option.labels?.length ? (
-                                <div className="mt-2 flex flex-wrap gap-1.5">
-                                  {option.labels.slice(0, 3).map((label) => (
-                                    <span key={label} className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-white/70">
-                                      {label}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : null}
-                            </div>
-                            {selected ? <CheckCircle2 className="h-4 w-4 text-white" /> : null}
-                          </button>
-                        );
-                      })
-                    ) : (
-                      <div className="rounded-xl border border-dashed border-white/[0.10] px-3 py-4 text-sm text-[#8f97aa]">
-                        还没有启用文本模型，请先到后台模型管理添加并启用文本模型。
+                            ) : (
+                              <div className="rounded-xl border border-dashed border-white/[0.08] px-3 py-4 text-sm text-[#687183]">
+                                {group.title === '自定义模型' ? '还没有自定义模型，可到设置中添加。' : '当前类型暂无可用模型。'}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {modelOptions.length === 0 ? (
+                          <div className="col-span-full px-3 py-6 text-center text-xs text-[#687183]">当前类型暂无可用模型</div>
+                        ) : null}
                       </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               ) : null}

@@ -636,7 +636,7 @@ export default function AgentCreate() {
                                     }}
                                     className={cn(
                                       'group flex w-full gap-3 rounded-[12px] border border-[rgba(255,255,255,0.08)] px-[10px] py-3 text-left transition-all',
-                                      selected ? 'border-sky-300/35 bg-sky-300/16 shadow-[0_0_0_1px_rgba(125,211,252,0.12)]' : 'text-[#e4e9f1] hover:bg-[rgba(255,255,255,0.05)]'
+                                      selected ? 'border-sky-300/70 bg-blue-600/35 shadow-[0_0_0_1px_rgba(125,211,252,0.22)]' : 'text-[#e4e9f1] hover:bg-[rgba(255,255,255,0.05)]'
                                     )}
                                   >
                                     <div className="flex h-[64px] w-[64px] shrink-0 items-center justify-center overflow-hidden rounded-[16px] bg-[#1B1B20]">

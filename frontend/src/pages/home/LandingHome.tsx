@@ -29,6 +29,7 @@ import {
 } from "../../lib/generatorOptions";
 import { generateImageAsset, generateVideoAsset } from "../../services/media";
 import { fetchHomeFeed, reportCollectionImageBroken, type CollectionWork } from "../../services/collection";
+import { useAgentApplyPrompt } from "../../hooks/useAgentApplyPrompt";
 
 function padNumber(value: number) {
   return value.toString().padStart(2, "0");
@@ -253,6 +254,12 @@ export default function LandingHome() {
     if (durationOptions.some((option) => option.value === duration)) return;
     setDuration(durationOptions.find((option) => option.value === "10s")?.value ?? durationOptions[0]?.value ?? "10s");
   }, [duration, durationOptions, type]);
+
+  useAgentApplyPrompt((nextPrompt) => {
+    setPrompt(nextPrompt);
+    setOpenGeneratorPanel(null);
+    generatorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

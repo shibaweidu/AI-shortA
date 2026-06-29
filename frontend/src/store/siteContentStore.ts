@@ -18,6 +18,18 @@ export type SiteNavItem = {
   richContent?: string;
 };
 
+export type SiteAnnouncement = {
+  id: string;
+  title: string;
+  summary: string;
+  content: string;
+  date: string;
+  pinned: boolean;
+  enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
 interface SiteContentState {
   siteLogoUrl: string;
   siteTitle: string;
@@ -26,14 +38,17 @@ interface SiteContentState {
   homeTitle: string;
   homeHighlight: string;
   homeSubtitle: string;
+  announcementsEnabled: boolean;
+  announcements: SiteAnnouncement[];
   setSiteBrand: (input: { siteLogoUrl: string; siteTitle: string; siteTagline: string }) => void;
   setCustomNavItems: (items: SiteNavItem[]) => void;
   setHomeContent: (input: { homeTitle: string; homeHighlight: string; homeSubtitle: string }) => void;
+  setAnnouncementsConfig: (input: { enabled: boolean; announcements: SiteAnnouncement[] }) => void;
 }
 
 type PersistedSiteContentState = Pick<
   SiteContentState,
-  "siteLogoUrl" | "siteTitle" | "siteTagline" | "customNavItems" | "homeTitle" | "homeHighlight" | "homeSubtitle"
+  "siteLogoUrl" | "siteTitle" | "siteTagline" | "customNavItems" | "homeTitle" | "homeHighlight" | "homeSubtitle" | "announcementsEnabled" | "announcements"
 >;
 
 export const DEFAULT_SITE_LOGO_URL = "/koala-ai-logo.png";
@@ -65,6 +80,43 @@ export function normalizeSiteNavItem(item: SiteNavItem): SiteNavItem {
   };
 }
 
+function formatTodayDate() {
+  const date = new Date();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+export function createSiteAnnouncement(): SiteAnnouncement {
+  const now = Date.now();
+  return {
+    id: `ann-${now}-${Math.random().toString(36).slice(2, 8)}`,
+    title: "新公告",
+    summary: "",
+    content: "<p>在此输入公告内容...</p>",
+    date: formatTodayDate(),
+    pinned: false,
+    enabled: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function normalizeSiteAnnouncement(item: Partial<SiteAnnouncement>): SiteAnnouncement {
+  const now = Date.now();
+  return {
+    id: item.id || `ann-${now}-${Math.random().toString(36).slice(2, 8)}`,
+    title: item.title ?? "",
+    summary: item.summary ?? "",
+    content: item.content ?? "",
+    date: item.date || formatTodayDate(),
+    pinned: item.pinned === true,
+    enabled: item.enabled !== false,
+    createdAt: typeof item.createdAt === "number" ? item.createdAt : now,
+    updatedAt: typeof item.updatedAt === "number" ? item.updatedAt : now,
+  };
+}
+
 export function hasRenderableSitePage(item: SiteNavItem) {
   if (!item.enabled || !item.label.trim() || !item.pageTitle.trim()) return false;
 
@@ -91,6 +143,8 @@ export const useSiteContentStore = create<SiteContentState>()(
       homeTitle: "开启你的 Agent 模式，立即开始创作。",
       homeHighlight: "Agent 模式",
       homeSubtitle: "输入你的创意构想，探索无限视觉可能。",
+      announcementsEnabled: false,
+      announcements: [],
       setSiteBrand: (input) =>
         set({
           siteLogoUrl: input.siteLogoUrl,
@@ -104,6 +158,11 @@ export const useSiteContentStore = create<SiteContentState>()(
           homeHighlight: input.homeHighlight,
           homeSubtitle: input.homeSubtitle,
         }),
+      setAnnouncementsConfig: (input) =>
+        set({
+          announcementsEnabled: input.enabled,
+          announcements: input.announcements.map(normalizeSiteAnnouncement),
+        }),
     }),
     {
       name: "koala-site-content-v1",
@@ -116,6 +175,8 @@ export const useSiteContentStore = create<SiteContentState>()(
         homeTitle: state.homeTitle,
         homeHighlight: state.homeHighlight,
         homeSubtitle: state.homeSubtitle,
+        announcementsEnabled: state.announcementsEnabled,
+        announcements: state.announcements.map(normalizeSiteAnnouncement),
       }),
     } satisfies PersistOptions<SiteContentState, PersistedSiteContentState>
   )

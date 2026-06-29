@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
-import { ImagePlus, Plus, Save, Trash2 } from "lucide-react";
+import { Bell, ImagePlus, Pin, Plus, Save, Trash2 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { RichTextEditor } from "../../components/editor/RichTextEditor";
@@ -8,9 +8,12 @@ import { getDisplayAssetUrl } from "../../lib/utils";
 import { uploadImageFiles } from "../../services/uploads";
 import {
   DEFAULT_SITE_LOGO_URL,
+  createSiteAnnouncement,
   createSiteContentBlock,
+  normalizeSiteAnnouncement,
   normalizeSiteNavItem,
   useSiteContentStore,
+  type SiteAnnouncement,
   type SiteNavItem,
 } from "../../store/siteContentStore";
 
@@ -25,6 +28,13 @@ function createNavItem(): SiteNavItem {
   };
 }
 
+function sortAnnouncements(items: SiteAnnouncement[]) {
+  return [...items].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return (b.date || "").localeCompare(a.date || "") || b.updatedAt - a.updatedAt;
+  });
+}
+
 export default function AdminHomeContent() {
   const {
     siteLogoUrl,
@@ -34,9 +44,12 @@ export default function AdminHomeContent() {
     homeTitle,
     homeHighlight,
     homeSubtitle,
+    announcementsEnabled,
+    announcements,
     setSiteBrand,
     setCustomNavItems,
     setHomeContent,
+    setAnnouncementsConfig,
   } = useSiteContentStore();
 
   const [logoUrl, setLogoUrl] = useState(siteLogoUrl);
@@ -44,6 +57,10 @@ export default function AdminHomeContent() {
   const [tagline, setTagline] = useState(siteTagline);
   const [navItems, setNavItems] = useState<SiteNavItem[]>(customNavItems.map(normalizeSiteNavItem));
   const [selectedNavId, setSelectedNavId] = useState(navItems[0]?.id ?? "");
+  const [announcementEnabledDraft, setAnnouncementEnabledDraft] = useState(announcementsEnabled);
+  const [announcementItems, setAnnouncementItems] = useState<SiteAnnouncement[]>(announcements.map(normalizeSiteAnnouncement));
+  const [selectedAnnouncementId, setSelectedAnnouncementId] = useState(announcementItems[0]?.id ?? "");
+  const [editorMode, setEditorMode] = useState<"nav" | "announcement">("nav");
   const [title, setTitle] = useState(homeTitle);
   const [highlight, setHighlight] = useState(homeHighlight);
   const [subtitle, setSubtitle] = useState(homeSubtitle);
@@ -51,21 +68,36 @@ export default function AdminHomeContent() {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    const normalized = customNavItems.map(normalizeSiteNavItem);
+    const normalizedNav = customNavItems.map(normalizeSiteNavItem);
+    const normalizedAnnouncements = announcements.map(normalizeSiteAnnouncement);
     setLogoUrl(siteLogoUrl);
     setBrandTitle(siteTitle);
     setTagline(siteTagline);
-    setNavItems(normalized);
-    setSelectedNavId((current) => current && normalized.some((item) => item.id === current) ? current : normalized[0]?.id ?? "");
+    setNavItems(normalizedNav);
+    setSelectedNavId((current) => current && normalizedNav.some((item) => item.id === current) ? current : normalizedNav[0]?.id ?? "");
+    setAnnouncementEnabledDraft(announcementsEnabled);
+    setAnnouncementItems(normalizedAnnouncements);
+    setSelectedAnnouncementId((current) => current && normalizedAnnouncements.some((item) => item.id === current) ? current : normalizedAnnouncements[0]?.id ?? "");
     setTitle(homeTitle);
     setHighlight(homeHighlight);
     setSubtitle(homeSubtitle);
-  }, [customNavItems, homeHighlight, homeSubtitle, homeTitle, siteLogoUrl, siteTagline, siteTitle]);
+  }, [announcements, announcementsEnabled, customNavItems, homeHighlight, homeSubtitle, homeTitle, siteLogoUrl, siteTagline, siteTitle]);
 
   const selectedItem = useMemo(() => navItems.find((item) => item.id === selectedNavId) ?? null, [navItems, selectedNavId]);
+  const selectedAnnouncement = useMemo(
+    () => announcementItems.find((item) => item.id === selectedAnnouncementId) ?? null,
+    [announcementItems, selectedAnnouncementId]
+  );
+  const orderedAnnouncements = useMemo(() => sortAnnouncements(announcementItems), [announcementItems]);
+
   const setSelectedItem = (patch: Partial<SiteNavItem>) => {
     if (!selectedItem) return;
     setNavItems((items) => items.map((item) => item.id === selectedItem.id ? { ...item, ...patch } : item));
+  };
+
+  const setSelectedAnnouncement = (patch: Partial<SiteAnnouncement>) => {
+    if (!selectedAnnouncement) return;
+    setAnnouncementItems((items) => items.map((item) => item.id === selectedAnnouncement.id ? { ...item, ...patch, updatedAt: Date.now() } : item));
   };
 
   const handleUploadLogo = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -88,12 +120,28 @@ export default function AdminHomeContent() {
     const item = createNavItem();
     setNavItems((items) => [...items, item]);
     setSelectedNavId(item.id);
+    setEditorMode("nav");
   };
 
   const removeNavItem = (id: string) => {
     setNavItems((items) => {
       const next = items.filter((item) => item.id !== id);
       if (selectedNavId === id) setSelectedNavId(next[0]?.id ?? "");
+      return next;
+    });
+  };
+
+  const addAnnouncement = () => {
+    const item = createSiteAnnouncement();
+    setAnnouncementItems((items) => [item, ...items]);
+    setSelectedAnnouncementId(item.id);
+    setEditorMode("announcement");
+  };
+
+  const removeAnnouncement = (id: string) => {
+    setAnnouncementItems((items) => {
+      const next = items.filter((item) => item.id !== id);
+      if (selectedAnnouncementId === id) setSelectedAnnouncementId(next[0]?.id ?? "");
       return next;
     });
   };
@@ -123,14 +171,22 @@ export default function AdminHomeContent() {
       }))
       .filter((item) => {
         if (!item.label || !item.pageTitle) return false;
-        // 有富文本内容就认为有效
-        if (item.richContent && item.richContent.trim()) return true;
-        // 否则检查 blocks（向后兼容）
+        if (item.richContent && item.richContent.replace(/<[^>]*>/g, "").trim()) return true;
         return item.blocks.some((block) => {
           if (block.type === "image" || block.type === "file") return Boolean(block.url);
           return Boolean(block.text.trim());
         });
       });
+
+    const cleanedAnnouncements = announcementItems
+      .map(normalizeSiteAnnouncement)
+      .map((item) => ({
+        ...item,
+        title: item.title.trim(),
+        summary: item.summary.trim(),
+        content: item.content.trim(),
+      }))
+      .filter((item) => item.title || item.summary || item.content.replace(/<[^>]*>/g, "").trim());
 
     setSiteBrand({
       siteLogoUrl: logoUrl.trim() || DEFAULT_SITE_LOGO_URL,
@@ -139,8 +195,11 @@ export default function AdminHomeContent() {
     });
     setCustomNavItems(cleanedNavItems);
     setHomeContent({ homeTitle: title, homeHighlight: highlight, homeSubtitle: subtitle });
+    setAnnouncementsConfig({ enabled: announcementEnabledDraft, announcements: cleanedAnnouncements });
     setNavItems(cleanedNavItems);
+    setAnnouncementItems(cleanedAnnouncements);
     setSelectedNavId((current) => current && cleanedNavItems.some((item) => item.id === current) ? current : cleanedNavItems[0]?.id ?? "");
+    setSelectedAnnouncementId((current) => current && cleanedAnnouncements.some((item) => item.id === current) ? current : cleanedAnnouncements[0]?.id ?? "");
     setMessage("站点配置已保存，前台刷新后即可查看。");
   };
 
@@ -148,7 +207,7 @@ export default function AdminHomeContent() {
     <div className="flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[#08090d] p-6 text-white">
       <div className="mb-5 shrink-0">
         <h1 className="text-2xl font-semibold text-white">站点内容</h1>
-        <p className="mt-2 text-sm text-[#8f97aa]">配置网站品牌、首页文案，以及全局导航的自定义内容页。</p>
+        <p className="mt-2 text-sm text-[#8f97aa]">配置网站品牌、首页文案、全局导航页面和公告栏。</p>
       </div>
 
       <div className="grid min-h-0 flex-1 gap-5 overflow-hidden xl:grid-cols-[400px_minmax(0,1fr)]">
@@ -189,13 +248,63 @@ export default function AdminHomeContent() {
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => setSelectedNavId(item.id)}
-                    className={item.id === selectedNavId ? "w-full rounded-2xl border border-cyan-300/40 bg-cyan-400/10 p-3 text-left" : "w-full rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3 text-left hover:bg-white/[0.05]"}
+                    onClick={() => {
+                      setSelectedNavId(item.id);
+                      setEditorMode("nav");
+                    }}
+                    className={editorMode === "nav" && item.id === selectedNavId ? "w-full rounded-2xl border border-cyan-300/40 bg-cyan-400/10 p-3 text-left" : "w-full rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3 text-left hover:bg-white/[0.05]"}
                   >
                     <div className="flex items-center gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-semibold text-white">{item.label || "未命名导航"}</div>
                         <div className="mt-1 truncate text-xs text-[#8f97aa]">{item.pageTitle || "未填写页面标题"}</div>
+                      </div>
+                      <span className={item.enabled ? "rounded-full bg-emerald-400/10 px-2 py-1 text-xs text-emerald-200" : "rounded-full bg-white/[0.05] px-2 py-1 text-xs text-[#8f97aa]"}>
+                        {item.enabled ? "显示" : "隐藏"}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-[24px] border border-white/[0.08] bg-[#11141b] p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold">公告栏</h2>
+                  <div className="mt-1 text-xs text-[#8f97aa]">公告列表按置顶优先、日期倒序展示。</div>
+                </div>
+                <Button type="button" onClick={addAnnouncement} className="h-10 rounded-xl bg-cyan-400 px-3 text-black hover:bg-cyan-300">
+                  <Plus className="mr-2 h-4 w-4" />
+                  新增
+                </Button>
+              </div>
+
+              <label className="mt-4 flex items-center justify-between rounded-2xl border border-white/[0.06] bg-white/[0.03] px-3 py-3 text-sm text-[#d5d9e2]">
+                <span>前台显示公告栏</span>
+                <input type="checkbox" checked={announcementEnabledDraft} onChange={(event) => setAnnouncementEnabledDraft(event.target.checked)} />
+              </label>
+
+              <div className="mt-4 space-y-2">
+                {orderedAnnouncements.length === 0 ? <div className="rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] p-5 text-sm text-[#8f97aa]">还没有公告。</div> : null}
+                {orderedAnnouncements.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedAnnouncementId(item.id);
+                      setEditorMode("announcement");
+                    }}
+                    className={editorMode === "announcement" && item.id === selectedAnnouncementId ? "w-full rounded-2xl border border-cyan-300/40 bg-cyan-400/10 p-3 text-left" : "w-full rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3 text-left hover:bg-white/[0.05]"}
+                  >
+                    <div className="flex items-start gap-3">
+                      <Bell className="mt-0.5 h-4 w-4 shrink-0 text-cyan-200" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="truncate text-sm font-semibold text-white">{item.title || "未命名公告"}</div>
+                          {item.pinned ? <span className="rounded-full bg-cyan-400/10 px-2 py-0.5 text-[10px] text-cyan-200">置顶</span> : null}
+                        </div>
+                        <div className="mt-1 truncate text-xs text-[#8f97aa]">{item.summary || item.date}</div>
                       </div>
                       <span className={item.enabled ? "rounded-full bg-emerald-400/10 px-2 py-1 text-xs text-emerald-200" : "rounded-full bg-white/[0.05] px-2 py-1 text-xs text-[#8f97aa]"}>
                         {item.enabled ? "显示" : "隐藏"}
@@ -224,7 +333,56 @@ export default function AdminHomeContent() {
         </div>
 
         <section className="flex min-h-0 flex-col rounded-[24px] border border-white/[0.08] bg-[#11141b] p-5">
-          {selectedItem ? (
+          {editorMode === "announcement" ? (
+            selectedAnnouncement ? (
+              <>
+                <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold">编辑公告</h2>
+                    <p className="mt-1 text-xs text-[#8f97aa]">设置标题、摘要、日期、置顶和公告正文。</p>
+                  </div>
+                  <button type="button" onClick={() => removeAnnouncement(selectedAnnouncement.id)} className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-400/20 bg-red-500/10 text-red-200 hover:text-red-100">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mb-3 grid shrink-0 gap-3 md:grid-cols-[minmax(0,1fr)_160px]">
+                  <Input value={selectedAnnouncement.title} onChange={(event) => setSelectedAnnouncement({ title: event.target.value })} placeholder="公告标题" className="h-11 border-white/[0.08] bg-white/[0.03] text-white placeholder:text-[#667085]" />
+                  <Input type="date" value={selectedAnnouncement.date} onChange={(event) => setSelectedAnnouncement({ date: event.target.value })} className="h-11 border-white/[0.08] bg-white/[0.03] text-white placeholder:text-[#667085]" />
+                </div>
+                <Input value={selectedAnnouncement.summary} onChange={(event) => setSelectedAnnouncement({ summary: event.target.value })} placeholder="公告摘要" className="mb-3 h-11 shrink-0 border-white/[0.08] bg-white/[0.03] text-white placeholder:text-[#667085]" />
+
+                <div className="mb-3 flex shrink-0 flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-2 rounded-full bg-white/[0.04] px-3 py-1.5 text-sm text-[#d5d9e2]">
+                    <input type="checkbox" checked={selectedAnnouncement.enabled} onChange={(event) => setSelectedAnnouncement({ enabled: event.target.checked })} />
+                    前台显示
+                  </label>
+                  <label className="flex items-center gap-2 rounded-full bg-white/[0.04] px-3 py-1.5 text-sm text-[#d5d9e2]">
+                    <input type="checkbox" checked={selectedAnnouncement.pinned} onChange={(event) => setSelectedAnnouncement({ pinned: event.target.checked })} />
+                    <Pin className="h-3.5 w-3.5" />
+                    置顶
+                  </label>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <RichTextEditor
+                    content={selectedAnnouncement.content || "<p>开始输入公告内容...</p>"}
+                    onChange={(html) => setSelectedAnnouncement({ content: html })}
+                    placeholder="开始输入公告内容..."
+                    onImageUpload={handleUploadEditorImage}
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="flex min-h-[360px] flex-col items-center justify-center rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.02] text-center">
+                <div className="text-lg font-semibold">新增一条公告</div>
+                <Button type="button" onClick={addAnnouncement} className="mt-4 h-10 rounded-xl bg-cyan-400 px-4 text-black hover:bg-cyan-300">
+                  <Plus className="mr-2 h-4 w-4" />
+                  新增公告
+                </Button>
+              </div>
+            )
+          ) : selectedItem ? (
             <>
               <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
                 <div>

@@ -22,6 +22,7 @@ import { useFlowStore, type FlowItemType, type FlowReferenceRole } from "../../s
 import { useCreditStore } from "../../store/creditStore";
 import { useAuthStore } from "../../store/authStore";
 import { getModelCreditCost, useModelCreditStore } from "../../store/modelCreditStore";
+import { useAgentApplyPrompt } from "../../hooks/useAgentApplyPrompt";
 
 function padNumber(value: number) {
   return value.toString().padStart(2, "0");
@@ -144,6 +145,12 @@ export default function FlowProjects() {
     if (durationOptions.some((option) => option.value === duration)) return;
     setDuration(durationOptions.find((option) => option.value === "10s")?.value ?? durationOptions[0]?.value ?? "10s");
   }, [duration, durationOptions, type]);
+
+  useAgentApplyPrompt((nextPrompt) => {
+    setPrompt(nextPrompt);
+    setOpenGeneratorPanel(null);
+    generatorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
